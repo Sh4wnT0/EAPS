@@ -1,144 +1,344 @@
 package Fproj;
 
-import javax.swing.*;
-import java.awt.*;
-import java.awt.event.*;
+import java.awt.BorderLayout;
+import java.awt.CardLayout;
+import java.awt.Color;
+import java.awt.Cursor;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.Font;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Image;
+import java.awt.Insets;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+
+import javax.swing.BorderFactory;
+import javax.swing.ImageIcon;
+import javax.swing.JButton;
+import javax.swing.JLabel;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.SwingConstants;
 
 public class Admin extends JPanel {
 
+    // Layout components
     private CardLayout innerCardLayout;
     private JPanel innerCardPanel;
+    private String currentAdminUsername;
 
-    public Admin() {
+    // Sidebar buttons
+    private JButton btnHome, btnProfile, btnLeaveReq, btnOTReq, btnRecords, btnAttendance, btnPayroll;
+    private JButton currentSelectedButton = null;
 
-        setLayout(new BorderLayout());   // Better layout structure
-        
-        // Load and scale the logo image with error handling
-        ImageIcon originalIcon = new ImageIcon(getClass().getResource("logo.png")); // Load from Fproj package
-        Image scaledImage = originalIcon.getImage().getScaledInstance(150, 150, Image.SCALE_SMOOTH); // Scale to 50x50 without cropping
-        ImageIcon scaledIcon = new ImageIcon(scaledImage);
+    // Panel References (Stored as fields for direct access)
+    private HomePanel homePanel;
+    private adProfile profilePanel;
+    private LeaveApproval leavePanel;
+    private OTAdmin otPanel;
+    private AdminRecords recordsPanel;
+    private adminAttendance attendancePanel;
+    private adminPayroll payrollPanel;
 
-        // ====================== HEADER ============================
-        JPanel header = new JPanel();
-        header.setBackground(new Color(22, 102, 87));
-        header.setPreferredSize(new Dimension(100, 50));
-        header.setLayout(null);
+    // Colors
+    private final Color BRAND_COLOR = new Color(22, 102, 87);
+    private final Color SIDEBAR_BG = new Color(240, 244, 248);
+    private final Color HOVER_COLOR = new Color(220, 230, 240);
+    private final Color ACTIVE_COLOR = new Color(200, 220, 255);
 
-        // Create a label for the logo
-        JLabel logoLabel = new JLabel(scaledIcon);
-        logoLabel.setBounds(10, -11, 75, 75); // Position in top-left
-        header.add(logoLabel);
+    public Admin(String adminUsername) {
+        this.currentAdminUsername = adminUsername;
+        setLayout(new BorderLayout());
 
-        // ... (rest of the header code remains unchanged)
-        
-        JLabel lblTitle = new JLabel("Admin Dashboard");
-        lblTitle.setForeground(Color.WHITE);
-        lblTitle.setFont(new Font("Arial", Font.BOLD, 18));
-        lblTitle.setBounds(95, 8, 200, 30);
-        header.add(lblTitle);
-
-        // NEW: Notification button in top right (left of logout)
-        JButton btnNotifications = new JButton("Notifications");
-        btnNotifications.setBounds(740, 10, 100, 30);  // Positioned left of logout
-        btnNotifications.setBackground(new Color(220, 20, 60));  // Match logout style
-        btnNotifications.setForeground(Color.WHITE);
-        btnNotifications.setFocusPainted(false);
-        btnNotifications.addActionListener(e -> JOptionPane.showMessageDialog(this, "No new notifications."));  // Placeholder action
-        header.add(btnNotifications);
-
-        JButton btnLogout = new JButton("Log-out");
-        btnLogout.setBounds(850, 10, 100, 30);
-        btnLogout.setBackground(new Color(220, 20, 60));
-        btnLogout.setForeground(Color.WHITE);
-        btnLogout.setFocusPainted(false);
-        btnLogout.addActionListener(e -> Main.cardLayout.show(Main.cardPanel, "main"));
-        header.add(btnLogout);
-
+        // --- 1. HEADER SECTION ---
+        JPanel header = createHeader();
         add(header, BorderLayout.NORTH);
-        
-        
-        // ====================== SIDEBAR ============================
-        JPanel sidebar = new JPanel();
-        sidebar.setPreferredSize(new Dimension(180, 400));
-        sidebar.setBackground(new Color(230, 235, 245));
-        sidebar.setLayout(new GridLayout(11, 1, 0, 8));  // Increased to 11 rows for the new Home button
 
-        JButton btnHome = createMenuButton("Home");  // NEW: Home button
-        JButton btnRegistration = createMenuButton("Registration");
-        JButton btnLeaveReq = createMenuButton("Leave Requests");
-        JButton btnOTReq = createMenuButton("Holiday/OT Requests");
-        JButton btnRecords = createMenuButton("Employee Records");
-        JButton btnAttendance = createMenuButton("Attendance Records");  // New button
-        JButton btnPayroll = createMenuButton("Payroll Records");       // New button
-
-        sidebar.add(btnHome);  // Add Home first
-        sidebar.add(btnRegistration);
-        sidebar.add(btnLeaveReq);
-        sidebar.add(btnOTReq);
-        sidebar.add(btnRecords);
-        sidebar.add(btnAttendance);  // Add to sidebar
-        sidebar.add(btnPayroll);     // Add to sidebar
-
+        // --- 2. SIDEBAR SECTION ---
+        JPanel sidebar = createSidebar();
         add(sidebar, BorderLayout.WEST);
 
-        // =================== INNER CARD PANEL (CONTENT AREA) ===============
+        // --- 3. CONTENT AREA (CardLayout) ---
         innerCardLayout = new CardLayout();
         innerCardPanel = new JPanel(innerCardLayout);
         innerCardPanel.setBackground(Color.WHITE);
 
-        innerCardPanel.add(new HomePanel(), "home");  // NEW: Add Home panel
-        innerCardPanel.add(new RegistrationPanel(), "registration");
-        innerCardPanel.add(new LeaveApproval(), "leave");
-        innerCardPanel.add(new OTAdmin(), "ot");
-        innerCardPanel.add(new AdminRecords(), "records");
-        innerCardPanel.add(new adminAttendance(), "attendance");  // New panel
-        innerCardPanel.add(new adminPayroll(), "payroll");        // New panel
+        // Initialize Panels
+        homePanel = new HomePanel();
+        profilePanel = new adProfile(this.currentAdminUsername);
+        leavePanel = new LeaveApproval();
+        otPanel = new OTAdmin();
+        recordsPanel = new AdminRecords();
+        attendancePanel = new adminAttendance();
+        payrollPanel = new adminPayroll();
+
+        // Add Panels to CardLayout
+        innerCardPanel.add(homePanel, "home");
+        innerCardPanel.add(profilePanel, "profile");
+        innerCardPanel.add(leavePanel, "leave");
+        innerCardPanel.add(otPanel, "ot");
+        innerCardPanel.add(recordsPanel, "records");
+        innerCardPanel.add(attendancePanel, "attendance");
+        innerCardPanel.add(payrollPanel, "payroll");
 
         add(innerCardPanel, BorderLayout.CENTER);
 
-        // ====================== BUTTON ACTIONS =======================
-        btnHome.addActionListener(e -> innerCardLayout.show(innerCardPanel, "home"));  // NEW: Home action
-        btnRegistration.addActionListener(e -> innerCardLayout.show(innerCardPanel, "registration"));
-        btnLeaveReq.addActionListener(e -> innerCardLayout.show(innerCardPanel, "leave"));
-        btnOTReq.addActionListener(e -> innerCardLayout.show(innerCardPanel, "ot"));
-        btnRecords.addActionListener(e -> innerCardLayout.show(innerCardPanel, "records"));
-        btnAttendance.addActionListener(e -> innerCardLayout.show(innerCardPanel, "attendance"));  // New action
-        btnPayroll.addActionListener(e -> innerCardLayout.show(innerCardPanel, "payroll"));        // New action
+        // Select Home by default
+        setupButtonActions();
+        innerCardLayout.show(innerCardPanel, "home");
+        selectButton(btnHome);
     }
 
-    // ====================== MENU BUTTON FACTORY ======================
-    private JButton createMenuButton(String text) {
-        JButton btn = new JButton(text);
-        btn.setFocusPainted(false);
-        btn.setFont(new Font("Arial", Font.PLAIN, 15));
-        btn.setBackground(Color.WHITE);
-        btn.setBorder(BorderFactory.createLineBorder(new Color(180,180,180)));
+    private JPanel createHeader() {
+        JPanel header = new JPanel(new BorderLayout());
+        header.setBackground(BRAND_COLOR);
+        header.setPreferredSize(new Dimension(800, 60)); // Slightly taller for better spacing
+        header.setBorder(BorderFactory.createEmptyBorder(0, 10, 0, 10));
 
-        // Hover effect
+        // LEFT: Logo and Title
+        JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 10));
+        leftPanel.setOpaque(false);
+
+        // Logo Logic
+        ImageIcon logoIcon = null;
+        try {
+            ImageIcon original = new ImageIcon(getClass().getResource("logo.png"));
+            Image img = original.getImage().getScaledInstance(50, 50, Image.SCALE_SMOOTH);
+            logoIcon = new ImageIcon(img);
+        } catch (Exception e) {
+            // Placeholder if logo missing
+        }
+
+        JLabel lblLogo = new JLabel();
+        if (logoIcon != null) lblLogo.setIcon(logoIcon);
+        
+        JLabel lblTitle = new JLabel("Admin Dashboard");
+        lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 20));
+        lblTitle.setForeground(Color.WHITE);
+
+        leftPanel.add(lblLogo);
+        leftPanel.add(lblTitle);
+
+        // RIGHT: Buttons
+        JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 12));
+        rightPanel.setOpaque(false);
+
+        JButton btnNotifs = new JButton("Notifications");
+        styleHeaderButton(btnNotifs);
+        btnNotifs.addActionListener(e -> JOptionPane.showMessageDialog(this, "No new notifications."));
+
+        JButton btnLogout = new JButton("Logout");
+        styleHeaderButton(btnLogout);
+        btnLogout.setBackground(new Color(220, 53, 69)); // Red logout button
+        btnLogout.addActionListener(e -> {
+            int confirm = JOptionPane.showConfirmDialog(this, "Are you sure you want to logout?", "Logout", JOptionPane.YES_NO_OPTION);
+            if(confirm == JOptionPane.YES_OPTION){
+                Main.cardLayout.show(Main.cardPanel, "main");
+            }
+        });
+
+        rightPanel.add(btnNotifs);
+        rightPanel.add(btnLogout);
+
+        header.add(leftPanel, BorderLayout.WEST);
+        header.add(rightPanel, BorderLayout.EAST);
+
+        return header;
+    }
+
+    private JPanel createSidebar() {
+        JPanel sidebar = new JPanel(new GridBagLayout());
+        sidebar.setBackground(SIDEBAR_BG);
+        sidebar.setPreferredSize(new Dimension(220, 0)); // Wider sidebar
+        sidebar.setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, Color.LIGHT_GRAY));
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 1.0;
+        gbc.insets = new Insets(5, 10, 5, 10); // Padding around buttons
+
+        // Create Buttons
+        btnHome = createMenuButton("Home", "Home.png");
+        btnProfile = createMenuButton("My Profile", "leave.png");
+        btnLeaveReq = createMenuButton("Leave Requests", "otholiday.png");
+        btnOTReq = createMenuButton("OT / Holiday", "otholiday.png");
+        btnRecords = createMenuButton("Employees", "profile.png");
+        btnAttendance = createMenuButton("Attendance", "attendance.png");
+        btnPayroll = createMenuButton("Payroll", "payroll.png");
+
+        // Add to Sidebar
+        sidebar.add(btnHome, gbc); gbc.gridy++;
+        sidebar.add(btnProfile, gbc); gbc.gridy++;
+        
+        // Separator
+        gbc.insets = new Insets(15, 10, 5, 10);
+        JLabel lblManage = new JLabel("MANAGEMENT");
+        lblManage.setFont(new Font("Segoe UI", Font.BOLD, 10));
+        lblManage.setForeground(Color.GRAY);
+        sidebar.add(lblManage, gbc); gbc.gridy++;
+        gbc.insets = new Insets(5, 10, 5, 10);
+
+        sidebar.add(btnLeaveReq, gbc); gbc.gridy++;
+        sidebar.add(btnOTReq, gbc); gbc.gridy++;
+        sidebar.add(btnRecords, gbc); gbc.gridy++;
+        sidebar.add(btnAttendance, gbc); gbc.gridy++;
+        sidebar.add(btnPayroll, gbc); gbc.gridy++;
+
+        // Filler to push content up
+        GridBagConstraints gbcFiller = new GridBagConstraints();
+        gbcFiller.gridy = 100;
+        gbcFiller.weighty = 1.0;
+        sidebar.add(new JPanel(null) {{ setOpaque(false); }}, gbcFiller);
+
+        return sidebar;
+    }
+
+    private void setupButtonActions() {
+        btnHome.addActionListener(e -> {
+            innerCardLayout.show(innerCardPanel, "home");
+            selectButton(btnHome);
+        });
+
+        btnProfile.addActionListener(e -> {
+            innerCardLayout.show(innerCardPanel, "profile");
+            selectButton(btnProfile);
+        });
+
+        btnLeaveReq.addActionListener(e -> {
+            innerCardLayout.show(innerCardPanel, "leave");
+            leavePanel.fetchLeaveRequests(); // Direct access via field
+            selectButton(btnLeaveReq);
+        });
+
+        btnOTReq.addActionListener(e -> {
+            innerCardLayout.show(innerCardPanel, "ot");
+            otPanel.fetchRequests(); // Direct access via field
+            selectButton(btnOTReq);
+        });
+
+        btnRecords.addActionListener(e -> {
+            innerCardLayout.show(innerCardPanel, "records");
+            selectButton(btnRecords);
+        });
+
+        btnAttendance.addActionListener(e -> {
+            innerCardLayout.show(innerCardPanel, "attendance");
+            attendancePanel.loadSummaryTable(); // Direct access via field
+            selectButton(btnAttendance);
+        });
+
+        btnPayroll.addActionListener(e -> {
+            innerCardLayout.show(innerCardPanel, "payroll");
+            selectButton(btnPayroll);
+        });
+    }
+
+    // --- Helper UI Methods ---
+    private JButton createMenuButton(String text, String iconName) {
+        JButton btn = new JButton(text);
+        btn.setFont(new Font("Segoe UI", Font.PLAIN, 14)); // Clean, modern font
+        btn.setBackground(Color.WHITE);
+        btn.setForeground(new Color(60, 60, 60)); // Softer dark grey text
+        btn.setFocusPainted(false);
+        btn.setBorder(BorderFactory.createEmptyBorder(12, 20, 12, 10)); // Top, Left, Bottom, Right padding
+        btn.setHorizontalAlignment(SwingConstants.LEFT);
+        btn.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
+
+        // Load and Scale Icon
+        ImageIcon icon = loadIcon(iconName, 20); // 20x20 is a good standard size
+        if (icon != null) {
+            btn.setIcon(icon);
+            btn.setIconTextGap(20); // MORE space between icon and text looks cleaner
+        }
+    
+
+        // Modern Hover Effect
         btn.addMouseListener(new MouseAdapter() {
             public void mouseEntered(MouseEvent e) {
-                btn.setBackground(new Color(200, 220, 255));
+                if (btn != currentSelectedButton) {
+                    // Very subtle light green hover
+                    btn.setBackground(new Color(235, 245, 240)); 
+                }
             }
             public void mouseExited(MouseEvent e) {
-                btn.setBackground(Color.WHITE);
+                if (btn != currentSelectedButton) {
+                    btn.setBackground(Color.WHITE);
+                }
             }
         });
 
         return btn;
     }
+    private ImageIcon loadIcon(String fileName, int size) {
+        try {
+            java.net.URL imgURL = getClass().getResource("/" + fileName);
+            if (imgURL != null) {
+                ImageIcon originalIcon = new ImageIcon(imgURL);
+                Image img = originalIcon.getImage();
+                
+                // USE SCALE_SMOOTH for best quality when resizing
+                Image scaledImg = img.getScaledInstance(size, size, Image.SCALE_SMOOTH);
+                
+                return new ImageIcon(scaledImg);
+            } else {
+                // System.err.println("Icon not found: " + fileName);
+                return null;
+            }
+        } catch (Exception e) {
+            return null;
+        }
+    }
 
-    // NEW: Simple Home Panel inner class
+    private void selectButton(JButton btn) {
+        // Reset previous
+        if (currentSelectedButton != null) {
+            currentSelectedButton.setBackground(Color.WHITE);
+            currentSelectedButton.setForeground(Color.DARK_GRAY);
+            currentSelectedButton.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        }
+        // Set new
+        currentSelectedButton = btn;
+        currentSelectedButton.setBackground(ACTIVE_COLOR);
+        currentSelectedButton.setForeground(BRAND_COLOR);
+        currentSelectedButton.setFont(new Font("Segoe UI", Font.BOLD, 14));
+    }
+
+    private void styleHeaderButton(JButton btn) {
+        btn.setForeground(Color.WHITE);
+        btn.setBackground(new Color(255, 255, 255, 50)); // Semi-transparent
+        btn.setFocusPainted(false);
+        btn.setBorderPainted(false);
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+    }
+
+    // --- Inner Classes ---
+
+    // Simple Dashboard Home Screen
     private class HomePanel extends JPanel {
         public HomePanel() {
-            setLayout(new BorderLayout());
+            setLayout(new GridBagLayout());
             setBackground(Color.WHITE);
+
+            JLabel lblWelcome = new JLabel("Welcome back, Admin!");
+            lblWelcome.setFont(new Font("Segoe UI", Font.BOLD, 28));
+            lblWelcome.setForeground(BRAND_COLOR);
             
-            JLabel welcomeLabel = new JLabel("Welcome to the Admin Dashboard!", SwingConstants.CENTER);
-            welcomeLabel.setFont(new Font("Arial", Font.BOLD, 24));
-            welcomeLabel.setForeground(new Color(22, 102, 87));
-            add(welcomeLabel, BorderLayout.CENTER);
+            JLabel lblSub = new JLabel("Select an option from the sidebar to begin.");
+            lblSub.setFont(new Font("Segoe UI", Font.PLAIN, 16));
+            lblSub.setForeground(Color.GRAY);
+
+            GridBagConstraints gbc = new GridBagConstraints();
+            gbc.gridx = 0; gbc.gridy = 0;
+            add(lblWelcome, gbc);
             
-            // You can add more components here, like quick stats or links
+            gbc.gridy = 1;
+            gbc.insets = new Insets(10, 0, 0, 0);
+            add(lblSub, gbc);
         }
     }
 }

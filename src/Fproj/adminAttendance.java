@@ -1,14 +1,12 @@
 package Fproj;
 
-import javax.swing.*;
-import javax.swing.table.DefaultTableCellRenderer;
-import javax.swing.table.DefaultTableModel;
-import javax.swing.table.TableCellRenderer;
-import javax.swing.table.TableCellEditor;
 import java.awt.*;
 import java.awt.event.*;
 import java.sql.*;
-import java.time.LocalDate;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import javax.swing.*;
+import javax.swing.table.*;
 
 public class adminAttendance extends JPanel {
 
@@ -17,57 +15,84 @@ public class adminAttendance extends JPanel {
     private JTextField txtSearch;
 
     public adminAttendance() {
-        setLayout(null);
-        setBackground(new Color(240,240,240));
+        setLayout(new BorderLayout(20, 20)); // Use BorderLayout for resizing
+        setBackground(new Color(240, 240, 240));
+        setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
-        JLabel lblTitle = new JLabel("Attendance Records");
-        lblTitle.setFont(new Font("Arial", Font.BOLD, 18));
-        lblTitle.setBounds(20, 10, 200, 30);
-        add(lblTitle);
+        // ================= TOP PANEL =================
+        JPanel topPanel = new JPanel(new BorderLayout());
+        topPanel.setOpaque(false);
 
-        // Search field
-        JLabel lblSearch = new JLabel("Search by Emp No:");
-        lblSearch.setBounds(427, 50, 150, 25);
-        add(lblSearch);
+        JLabel lblTitle = new JLabel("Attendance Management");
+        lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 24));
+        topPanel.add(lblTitle, BorderLayout.WEST);
 
-        txtSearch = new JTextField();
-        txtSearch.setBounds(544, 50, 150, 25);
-        add(txtSearch);
+        // --- Action Bar (Search + ACR) ---
+        JPanel actionPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        actionPanel.setOpaque(false);
 
+        // ACR Button (Replaces Refresh)
+        JButton btnACR = new JButton("Review Requests (ACR)");
+        btnACR.setBackground(new Color(255, 140, 0)); // Orange
+        btnACR.setForeground(Color.WHITE);
+        btnACR.setFocusPainted(false);
+        btnACR.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        btnACR.addActionListener(e -> showACRDialog());
+
+        // Search Fields
+        txtSearch = new JTextField(15);
         JButton btnSearch = new JButton("Search");
-        btnSearch.setBounds(700, 50, 100, 25);
-        add(btnSearch);
+        btnSearch.setBackground(new Color(22, 102, 87));
+        btnSearch.setForeground(Color.WHITE);
+        btnSearch.setFocusPainted(false);
+        
+        JButton btnReset = new JButton("Reset");
+        btnReset.setBackground(Color.GRAY);
+        btnReset.setForeground(Color.WHITE);
 
-        JButton btnRefresh = new JButton("Refresh");
-        btnRefresh.setBounds(20, 50, 100, 25);
-        add(btnRefresh);
+        actionPanel.add(btnACR);
+        actionPanel.add(new JLabel("Emp No:"));
+        actionPanel.add(txtSearch);
+        actionPanel.add(btnSearch);
+        actionPanel.add(btnReset);
 
-        // Table columns for summary view
-        String[] cols = {"Emp No", "Name", "View"};
+        topPanel.add(actionPanel, BorderLayout.EAST);
+        add(topPanel, BorderLayout.NORTH);
+
+        // ================= CENTER TABLE =================
+        String[] cols = {"Emp No", "Name", "Action"};
         model = new DefaultTableModel(cols, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
-                return column == 2;  // Only View button is editable
+                return column == 2; // Only button column is editable
             }
         };
+
         table = new JTable(model);
-        table.getColumn("View").setCellRenderer(new ButtonRenderer());
-        table.getColumn("View").setCellEditor(new ButtonEditor(new JCheckBox()));
+        table.setRowHeight(35);
+        table.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 12));
+        
+        // Custom Renderer for View Button
+        table.getColumn("Action").setCellRenderer(new ButtonRenderer());
+        table.getColumn("Action").setCellEditor(new ButtonEditor(new JCheckBox()));
 
         JScrollPane scroll = new JScrollPane(table);
-        scroll.setBounds(20, 90, 780, 330);
-        add(scroll);
+        add(scroll, BorderLayout.CENTER);
+
+        // ================= LISTENERS =================
+        btnSearch.addActionListener(e -> searchSummary());
+        btnReset.addActionListener(e -> {
+            txtSearch.setText("");
+            loadSummaryTable();
+        });
 
         loadSummaryTable();
-
-        btnSearch.addActionListener(e -> searchSummary());
-        btnRefresh.addActionListener(e -> loadSummaryTable());
     }
 
-    private void loadSummaryTable() {
+    // ---------------- LOAD SUMMARY ----------------
+    void loadSummaryTable() {
         model.setRowCount(0);
-
-        String sql = "SELECT DISTINCT a.empNo, e.name FROM attendance_records a JOIN employees e ON a.empNo = e.empNo ORDER BY a.empNo";
+        String sql = "SELECT DISTINCT e.empNo, e.name FROM employees e LEFT JOIN attendance_records a ON a.empNo = e.empNo ORDER BY e.empNo";
 
         try (Connection conn = Database.connect();
              Statement stmt = conn.createStatement();
@@ -77,364 +102,298 @@ public class adminAttendance extends JPanel {
                 model.addRow(new Object[]{
                         rs.getString("empNo"),
                         rs.getString("name"),
-                        "View"
+                        "View Details"
                 });
             }
-
         } catch (SQLException e) {
             e.printStackTrace();
         }
     }
 
+    // ---------------- SEARCH ----------------
     private void searchSummary() {
         String search = txtSearch.getText().trim();
         if (search.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Enter Employee Number!");
             return;
         }
-
         model.setRowCount(0);
-
-        String sql = "SELECT DISTINCT a.empNo, e.name FROM attendance_records a JOIN employees e ON a.empNo = e.empNo WHERE a.empNo = ?";
+        String sql = "SELECT e.empNo, e.name FROM employees e WHERE e.empNo = ?";
 
         try (Connection conn = Database.connect();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
-
             pstmt.setString(1, search);
             ResultSet rs = pstmt.executeQuery();
-
-            while (rs.next()) {
+            if (rs.next()) {
                 model.addRow(new Object[]{
                         rs.getString("empNo"),
                         rs.getString("name"),
-                        "View"
+                        "View Details"
                 });
+            } else {
+                JOptionPane.showMessageDialog(this, "No records found.");
+                loadSummaryTable();
             }
-
-            if (model.getRowCount() == 0) {
-                JOptionPane.showMessageDialog(this, "No records found for Emp No: " + search);
-                loadSummaryTable();  // Reload all if none found
-            }
-
         } catch (SQLException e) {
             e.printStackTrace();
         }
     }
 
-    // Custom renderer for View button
-    class ButtonRenderer extends JButton implements TableCellRenderer {
-        public ButtonRenderer() {
-            setOpaque(true);
-        }
+    // =========================================================================
+    //                        ACR PROCESSING DIALOG
+    // =========================================================================
+    private void showACRDialog() {
+        JDialog dialog = new JDialog((Frame) SwingUtilities.getWindowAncestor(this), "Pending Correction Requests", true);
+        dialog.setSize(900, 500);
+        dialog.setLocationRelativeTo(this);
+        dialog.setLayout(new BorderLayout());
 
-        @Override
-        public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
-            setText((value == null) ? "" : value.toString());
-            return this;
-        }
+        // --- Table for Requests ---
+        String[] reqCols = {"Req ID", "Emp No", "Date", "New Time In", "New Time Out", "Status"};
+        DefaultTableModel reqModel = new DefaultTableModel(reqCols, 0) {
+            @Override
+            public boolean isCellEditable(int row, int col) { return false; }
+        };
+        JTable reqTable = new JTable(reqModel);
+        reqTable.setRowHeight(30);
+
+        // Load Pending Requests
+        loadRequests(reqModel);
+
+        dialog.add(new JScrollPane(reqTable), BorderLayout.CENTER);
+
+        // --- Button Panel ---
+        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        
+        JButton btnApprove = new JButton("Approve Selected");
+        btnApprove.setBackground(new Color(46, 204, 113));
+        btnApprove.setForeground(Color.WHITE);
+        
+        JButton btnReject = new JButton("Reject Selected");
+        btnReject.setBackground(new Color(231, 76, 60));
+        btnReject.setForeground(Color.WHITE);
+
+        btnApprove.addActionListener(e -> processRequest(reqTable, reqModel, "Approved"));
+        btnReject.addActionListener(e -> processRequest(reqTable, reqModel, "Rejected"));
+
+        btnPanel.add(btnApprove);
+        btnPanel.add(btnReject);
+        dialog.add(btnPanel, BorderLayout.SOUTH);
+
+        dialog.setVisible(true);
     }
 
-    // Custom editor for View button
-    class ButtonEditor extends DefaultCellEditor {
-        protected JButton button;
-        private String label;
-        private boolean isPushed;
-
-        public ButtonEditor(JCheckBox checkBox) {
-            super(checkBox);
-            button = new JButton();
-            button.setOpaque(true);
-            button.addActionListener(new ActionListener() {
-                @Override
-                public void actionPerformed(ActionEvent e) {
-                    fireEditingStopped();
-                    String empNo = (String) table.getValueAt(table.getSelectedRow(), 0);
-                    viewAttendanceDetails(empNo);
-                }
-            });
-        }
-
-        @Override
-        public Component getTableCellEditorComponent(JTable table, Object value, boolean isSelected, int row, int column) {
-            label = (value == null) ? "" : value.toString();
-            button.setText(label);
-            isPushed = true;
-            return button;
-        }
-
-        @Override
-        public Object getCellEditorValue() {
-            if (isPushed) {
-                // Action handled in button listener
+    private void loadRequests(DefaultTableModel model) {
+        model.setRowCount(0);
+        // Only show Pending requests
+        String sql = "SELECT * FROM attendance_requests WHERE status = 'Pending'";
+        try (Connection conn = Database.connect();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                model.addRow(new Object[]{
+                    rs.getInt("id"),
+                    rs.getString("empNo"),
+                    rs.getString("request_date"),
+                    rs.getString("time_in"),
+                    rs.getString("time_out"),
+                    rs.getString("status")
+                });
             }
-            isPushed = false;
-            return label;
+        } catch (SQLException e) { e.printStackTrace(); }
+    }
+
+    private void processRequest(JTable table, DefaultTableModel model, String newStatus) {
+        int selectedRow = table.getSelectedRow();
+        if (selectedRow == -1) {
+            JOptionPane.showMessageDialog(null, "Please select a request.");
+            return;
         }
 
-        @Override
-        public boolean stopCellEditing() {
-            isPushed = false;
-            return super.stopCellEditing();
-        }
+        int reqId = (int) table.getValueAt(selectedRow, 0);
+        String empNo = (String) table.getValueAt(selectedRow, 1);
+        String date = (String) table.getValueAt(selectedRow, 2);
+        String newIn = (String) table.getValueAt(selectedRow, 3);
+        String newOut = (String) table.getValueAt(selectedRow, 4);
 
-        @Override
-        protected void fireEditingStopped() {
-            super.fireEditingStopped();
+        try (Connection conn = Database.connect()) {
+            conn.setAutoCommit(false); // Start Transaction
+
+            // 1. Update Request Status
+            String updateReq = "UPDATE attendance_requests SET status = ? WHERE id = ?";
+            try (PreparedStatement pst = conn.prepareStatement(updateReq)) {
+                pst.setString(1, newStatus);
+                pst.setInt(2, reqId);
+                pst.executeUpdate();
+            }
+
+            // 2. If Approved, Update Main Attendance Table
+            if ("Approved".equals(newStatus)) {
+                // Check if record exists for that date
+                String checkSql = "SELECT count(*) FROM attendance_records WHERE empNo = ? AND date = ?";
+                boolean exists = false;
+                try (PreparedStatement pstCheck = conn.prepareStatement(checkSql)) {
+                    pstCheck.setString(1, empNo);
+                    pstCheck.setString(2, date);
+                    ResultSet rs = pstCheck.executeQuery();
+                    if (rs.next() && rs.getInt(1) > 0) exists = true;
+                }
+
+                if (exists) {
+                    String updateMain = "UPDATE attendance_records SET time_in = ?, time_out = ?, status = 'Present (Correction)' WHERE empNo = ? AND date = ?";
+                    try (PreparedStatement pstUp = conn.prepareStatement(updateMain)) {
+                        pstUp.setString(1, newIn);
+                        pstUp.setString(2, newOut);
+                        pstUp.setString(3, empNo);
+                        pstUp.setString(4, date);
+                        pstUp.executeUpdate();
+                    }
+                } else {
+                    // Insert if missing (Unlikely but safe to handle)
+                    String insertMain = "INSERT INTO attendance_records (empNo, date, time_in, time_out) VALUES (?, ?, ?, ?)";
+                    try (PreparedStatement pstIns = conn.prepareStatement(insertMain)) {
+                        pstIns.setString(1, empNo);
+                        pstIns.setString(2, date);
+                        pstIns.setString(3, newIn);
+                        pstIns.setString(4, newOut);
+                        pstIns.executeUpdate();
+                    }
+                }
+            }
+
+            // 3. Send Notification
+            String msg = "Your ACR for " + date + " has been " + newStatus + ".";
+            String notifSql = "INSERT INTO notifications (empNo, message, date) VALUES (?, ?, ?)";
+            try (PreparedStatement pstNotif = conn.prepareStatement(notifSql)) {
+                pstNotif.setString(1, empNo);
+                pstNotif.setString(2, msg);
+                pstNotif.setString(3, new SimpleDateFormat("yyyy-MM-dd HH:mm").format(new Date()));
+                pstNotif.executeUpdate();
+            }
+
+            conn.commit(); // Commit Transaction
+            JOptionPane.showMessageDialog(null, "Request " + newStatus + " Successfully!");
+            loadRequests(model); // Refresh table
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(null, "Error processing request: " + e.getMessage());
         }
     }
+
+    // =========================================================================
+    //                        VIEW DETAILS LOGIC
+    // =========================================================================
 
     private void viewAttendanceDetails(String empNo) {
         AttendanceDetailsDialog dialog = new AttendanceDetailsDialog(empNo);
         dialog.setVisible(true);
     }
 
-    // Custom Dialog for Attendance Details
+    // ---------------- BUTTON RENDERER & EDITOR ----------------
+    class ButtonRenderer extends JButton implements TableCellRenderer {
+        public ButtonRenderer() { setOpaque(true); }
+        public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+            setText((value == null) ? "" : value.toString());
+            return this;
+        }
+    }
+
+    class ButtonEditor extends DefaultCellEditor {
+        protected JButton button;
+        private String label;
+        public ButtonEditor(JCheckBox checkBox) {
+            super(checkBox);
+            button = new JButton();
+            button.setOpaque(true);
+            button.addActionListener(e -> {
+                fireEditingStopped();
+                String empNo = (String) table.getValueAt(table.getSelectedRow(), 0);
+                viewAttendanceDetails(empNo);
+            });
+        }
+        public Component getTableCellEditorComponent(JTable table, Object value, boolean isSelected, int row, int column) {
+            label = (value == null) ? "" : value.toString();
+            button.setText(label);
+            return button;
+        }
+        public Object getCellEditorValue() { return label; }
+    }
+
+    // ---------------- DETAILS DIALOG CLASS ----------------
     private class AttendanceDetailsDialog extends JDialog {
         private JTable detailsTable;
         private DefaultTableModel detailsModel;
-        private JComboBox<String> cbFilter;
-        private JButton btnFilter;
+        private final String empNo;
 
         public AttendanceDetailsDialog(String empNo) {
-            setTitle("Attendance Records for Emp No: " + empNo);
+            this.empNo = empNo;
+            setTitle("Attendance Records - " + empNo);
             setModal(true);
-            setSize(800, 450);  // Increased height for filter
+            setSize(900, 500);
             setLocationRelativeTo(null);
-            setLayout(null);
+            setLayout(new BorderLayout(10, 10));
 
-            // Filter components
-            JLabel lblFilter = new JLabel("Filter by Month Half:");
-            lblFilter.setBounds(20, 20, 150, 25);
-            add(lblFilter);
-
-            cbFilter = new JComboBox<>(new String[]{"All", "First Half (1-15)", "Second Half (16-End)"});
-            cbFilter.setBounds(170, 20, 200, 25);
-            add(cbFilter);
-
-            btnFilter = new JButton("Apply Filter");
-            btnFilter.setBounds(380, 20, 100, 25);
-            btnFilter.addActionListener(e -> loadDetailsTable(getTitle().substring(getTitle().lastIndexOf(": ") + 2)));
-            add(btnFilter);
-
-            // Table columns
-            String[] cols = {"ID", "Date", "Time In", "Time Out", "Status"};
-            detailsModel = new DefaultTableModel(cols, 0) {
-                @Override
-                public boolean isCellEditable(int row, int column) {
-                    // Make only Time In (2) and Time Out (3) editable; Status (4) is not editable
-                    return column == 2 || column == 3;
-                }
+            String[] cols = {
+                "Date", "Time In", "Time Out", "Second Time Out", "Workday", "Status"
             };
+
+            detailsModel = new DefaultTableModel(cols, 0) {
+                @Override public boolean isCellEditable(int row, int column) { return false; }
+            };
+
             detailsTable = new JTable(detailsModel);
-
-            JScrollPane scroll = new JScrollPane(detailsTable);
-            scroll.setBounds(20, 60, 740, 250);  // Adjusted y position
-            add(scroll);
-
-            JButton btnSave = new JButton("Save Changes");
-            btnSave.setBounds(20, 330, 120, 30);  // Adjusted y position
-            btnSave.setBackground(new Color(34, 139, 34));  // Green for save
-            btnSave.setForeground(Color.WHITE);
-            btnSave.addActionListener(e -> saveDetailsChanges());
-            add(btnSave);
+            detailsTable.setRowHeight(25);
+            add(new JScrollPane(detailsTable), BorderLayout.CENTER);
 
             JButton btnClose = new JButton("Close");
-            btnClose.setBounds(160, 330, 100, 30);  // Adjusted y position
             btnClose.addActionListener(e -> dispose());
-            add(btnClose);
+            JPanel pnl = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+            pnl.add(btnClose);
+            add(pnl, BorderLayout.SOUTH);
 
-            loadDetailsTable(empNo);
-        }
-
-        private void loadDetailsTable(String empNo) {
-            detailsModel.setRowCount(0);
-
-            String filter = (String) cbFilter.getSelectedItem();
-            String sql = "SELECT id, date, time_in, time_out, status FROM attendance_records WHERE empNo = ? ";
-            if ("First Half (1-15)".equals(filter)) {
-                sql += "AND CAST(SUBSTR(date, 9, 2) AS INTEGER) BETWEEN 1 AND 15 ";
-            } else if ("Second Half (16-End)".equals(filter)) {
-                sql += "AND CAST(SUBSTR(date, 9, 2) AS INTEGER) >= 16 ";
-            }
-            sql += "ORDER BY date ASC";  // Sort by date descending
-
-            try (Connection conn = Database.connect();
-                 PreparedStatement pstmt = conn.prepareStatement(sql)) {
-
-                pstmt.setString(1, empNo);
-                ResultSet rs = pstmt.executeQuery();
-
-                while (rs.next()) {
-                    detailsModel.addRow(new Object[]{
-                            rs.getInt("id"),
-                            rs.getString("date"),
-                            rs.getString("time_in"),
-                            rs.getString("time_out"),
-                            rs.getString("status")
-                    });
-                }
-
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-
-            // Update statuses for existing records if null
-            for (int i = 0; i < detailsModel.getRowCount(); i++) {
-                String date = (String) detailsModel.getValueAt(i, 1);
-                String timeIn = (String) detailsModel.getValueAt(i, 2);
-                String timeOut = (String) detailsModel.getValueAt(i, 3);
-                String status = (String) detailsModel.getValueAt(i, 4);
-                if (status == null || status.trim().isEmpty()) {
-                    String newStatus = calculateStatus(timeIn, timeOut, date);
-                    detailsModel.setValueAt(newStatus, i, 4);
-                    // Update in database
-                    try (Connection conn = Database.connect();
-                         PreparedStatement updatePs = conn.prepareStatement(
-                             "UPDATE attendance_records SET status = ? WHERE empNo = ? AND date = ?"
-                         )) {
-                        updatePs.setString(1, newStatus);
-                        updatePs.setString(2, empNo);
-                        updatePs.setString(3, date);
-                        updatePs.executeUpdate();
-                    } catch (SQLException e) {
-                        e.printStackTrace();
-                    }
-                }
-            }
-
-            // Apply row colors after loading
+            loadDetailsTable();
             applyRowColors(detailsTable);
         }
 
-        private void saveDetailsChanges() {
-            boolean hasChanges = false;
-            String updateSql = "UPDATE attendance_records SET time_in = ?, time_out = ? WHERE id = ?";
-
+        private void loadDetailsTable() {
+            detailsModel.setRowCount(0);
+            String sql = "SELECT date, time_in, time_out, second_time_out, workday, status FROM attendance_records WHERE empNo = ? ORDER BY date DESC";
             try (Connection conn = Database.connect();
-                 PreparedStatement pstmt = conn.prepareStatement(updateSql)) {
-
-                for (int i = 0; i < detailsModel.getRowCount(); i++) {
-                    int id = (Integer) detailsModel.getValueAt(i, 0);
-                    String timeIn = (String) detailsModel.getValueAt(i, 2);
-                    String timeOut = (String) detailsModel.getValueAt(i, 3);
-
-                    // Basic validation: Ensure times are not empty and in expected format
-                    if ((timeIn != null && !timeIn.trim().isEmpty()) || (timeOut != null && !timeOut.trim().isEmpty())) {
-                        // Validate format (optional, but recommended)
-                        try {
-                            java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern("hh:mm:ss a");
-                            if (timeIn != null && !timeIn.trim().isEmpty()) {
-                                java.time.LocalTime.parse(timeIn, formatter);
-                            }
-                            if (timeOut != null && !timeOut.trim().isEmpty()) {
-                                java.time.LocalTime.parse(timeOut, formatter);
-                            }
-                        } catch (Exception ex) {
-                            JOptionPane.showMessageDialog(this, "Invalid time format in row " + (i + 1) + ". Use 'hh:mm:ss AM/PM'. Skipping save.");
-                            continue;
-                        }
-
-                        // Set parameters and execute update
-                        pstmt.setString(1, timeIn);
-                        pstmt.setString(2, timeOut);
-                        pstmt.setInt(3, id);
-                        pstmt.executeUpdate();
-                        hasChanges = true;
-
-                        // Recalculate status after updating times
-                        String date = (String) detailsModel.getValueAt(i, 1);
-                        String newStatus = calculateStatus(timeIn, timeOut, date);
-                        detailsModel.setValueAt(newStatus, i, 4);
-                        // Update status in database
-                        PreparedStatement statusPs = conn.prepareStatement(
-                            "UPDATE attendance_records SET status = ? WHERE id = ?"
-                        );
-                        statusPs.setString(1, newStatus);
-                        statusPs.setInt(2, id);
-                        statusPs.executeUpdate();
-                        statusPs.close();
-                    }
+                 PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                pstmt.setString(1, empNo);
+                ResultSet rs = pstmt.executeQuery();
+                while (rs.next()) {
+                    detailsModel.addRow(new Object[]{
+                            rs.getString("date"),
+                            rs.getString("time_in"),
+                            rs.getString("time_out"),
+                            rs.getString("second_time_out"),
+                            rs.getString("workday"),
+                            rs.getString("status")
+                    });
                 }
-
-                if (hasChanges) {
-                    JOptionPane.showMessageDialog(this, "Changes saved successfully!");
-                    // Reload the details table to reflect updates
-                    String empNo = getTitle().substring(getTitle().lastIndexOf(": ") + 2);
-                    loadDetailsTable(empNo);
-                } else {
-                    JOptionPane.showMessageDialog(this, "No changes to save.");
-                }
-
-            } catch (SQLException e) {
-                e.printStackTrace();
-                JOptionPane.showMessageDialog(this, "Error saving changes: " + e.getMessage());
-            }
-        }
-
-        private String calculateStatus(String timeInStr, String timeOutStr, String dateStr) {
-            // Check if workday (Monday to Friday)
-            try {
-                java.time.LocalDate date = java.time.LocalDate.parse(dateStr);
-                java.time.DayOfWeek day = date.getDayOfWeek();
-                boolean isWorkday = !(day == java.time.DayOfWeek.SATURDAY || day == java.time.DayOfWeek.SUNDAY);
-                if (!isWorkday) {
-                    return "";  // Not a workday, no status
-                }
-            } catch (Exception e) {
-                return "Error";
-            }
-
-            if (timeInStr == null || timeInStr.trim().isEmpty() || timeOutStr == null || timeOutStr.trim().isEmpty()) {
-                return "Absent";
-            }
-
-            try {
-                java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern("hh:mm:ss a");
-                java.time.LocalTime timeIn = java.time.LocalTime.parse(timeInStr, formatter);
-                java.time.LocalTime timeOut = java.time.LocalTime.parse(timeOutStr, formatter);
-                java.time.LocalTime start = java.time.LocalTime.of(8, 0);
-                java.time.LocalTime end = java.time.LocalTime.of(17, 0);
-
-                boolean onTimeIn = timeIn.isBefore(start) || timeIn.equals(start);  // <= 8:00
-                boolean onTimeOut = timeOut.isAfter(end) || timeOut.equals(end);   // >= 17:00
-
-                if (onTimeIn && onTimeOut) return "On Time";
-                if (!onTimeIn && onTimeOut) return "Late";
-                if (onTimeIn && !onTimeOut) return "Undertime";
-                return "Late and Undertime";
-            } catch (Exception e) {
-                return "Error";
-            }
+            } catch (SQLException e) { e.printStackTrace(); }
         }
     }
 
     private void applyRowColors(JTable table) {
         table.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
             @Override
-            public Component getTableCellRendererComponent(JTable table, Object value,
-                    boolean isSelected, boolean hasFocus, int row, int column) {
+            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                String status = "";
+                try {
+                    Object o = table.getValueAt(row, 5); // Status Column
+                    if (o != null) status = o.toString();
+                } catch (Exception ignored) {}
 
-                Component c = super.getTableCellRendererComponent(
-                    table, value, isSelected, hasFocus, row, column
-                );
-
-                String status = (String) table.getValueAt(row, 4);  // status column (index 4 in details table)
-
-                // Default background if not selected
                 if (!isSelected) {
-                    if ("On Time".equalsIgnoreCase(status)) {
-                        c.setBackground(new Color(200, 255, 200));  // Green
-                    } else if ("Late".equalsIgnoreCase(status) || "Undertime".equalsIgnoreCase(status) || "Late and Undertime".equalsIgnoreCase(status)) {
-                        c.setBackground(new Color(200, 220, 255));  // Blue
-                    } else if ("Leave".equalsIgnoreCase(status)) {
-                        c.setBackground(Color.YELLOW);  // Yellow
-                    } else if ("Absent".equalsIgnoreCase(status)) {
-                        c.setBackground(new Color(255, 200, 200));  // Red
-                    } else {
-                        c.setBackground(Color.WHITE);  // Default
-                    }
+                    if (status.contains("On Time")) c.setBackground(new Color(200, 255, 200));
+                    else if (status.contains("Late") || status.contains("Undertime")) c.setBackground(new Color(255, 230, 180));
+                    else if (status.contains("Absent")) c.setBackground(new Color(255, 200, 200));
+                    else c.setBackground(Color.WHITE);
                 }
-
                 return c;
             }
         });

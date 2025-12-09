@@ -1,6 +1,11 @@
 package Fproj;
 
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
@@ -39,12 +44,69 @@ public class Database {
             return false;
         }
     }
+ // ---------------- CREATE AS_RECORDS TABLE (ADMIN AND STAFF) ----------------
+    public static void createASRecordsTable() {
+        String sql = "CREATE TABLE IF NOT EXISTS as_records ("
+                + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                + "name TEXT NOT NULL, "
+                + "role TEXT NOT NULL CHECK (role IN ('admin', 'staff')), "
+                + "address TEXT NOT NULL, "
+                + "email TEXT NOT NULL, "
+                + "contact TEXT NOT NULL, "
+                + "position TEXT NOT NULL, "
+                + "photo_path TEXT, "
+                + "username TEXT NOT NULL UNIQUE, "
+                + "password TEXT NOT NULL"  // Store hashed passwords here
+                + ");";
 
+        try (Connection conn = connect();
+             Statement stmt = conn.createStatement()) {
+
+            stmt.execute(sql);
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+ // ---------------- INSERT DEFAULT ADMIN ----------------
+    public static void insertDefaultAdmin() {
+        String sql = "INSERT OR IGNORE INTO as_records (name, role, address, email, contact, position, username, password) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+        try (Connection conn = connect();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, "Default Admin");
+            pstmt.setString(2, "admin");
+            pstmt.setString(3, "123 street");
+            pstmt.setString(4, "admin@gmail.com"); 
+            pstmt.setString(5, "09123456789"); 
+            pstmt.setString(6, "CEO"); 
+            pstmt.setString(7, "admin"); 
+            pstmt.setString(8, "admin123"); 
+            // Hash this in production: e.g., BCrypt.hashpw("admin123", BCrypt.gensalt())
+            pstmt.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void insertASRecord(String name, String role, String username, String hashedPassword) {
+        String sql = "INSERT INTO as_records (name, role, username, password) VALUES (?, ?, ?, ?)";
+        try (Connection conn = connect();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, name);
+            pstmt.setString(2, role);
+            pstmt.setString(3, username);
+            pstmt.setString(4, hashedPassword);  // Ensure password is hashed (e.g., BCrypt)
+            pstmt.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
     // ---------------- CREATE EMPLOYEES TABLE ----------------
     public static void createTable() {
         String sql = "CREATE TABLE IF NOT EXISTS employees ("
                 + "empNo TEXT PRIMARY KEY, "
                 + "name TEXT NOT NULL, "
+                + "role TEXT NOT NULL, "
                 + "address TEXT NOT NULL, "
                 + "email TEXT NOT NULL, "
                 + "contact TEXT NOT NULL, "
@@ -90,6 +152,22 @@ public class Database {
             e.printStackTrace();
         }
     }
+    public static void createACRTable() {
+        String sql = "CREATE TABLE IF NOT EXISTS attendance_requests ("
+                + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                + "empNo TEXT NOT NULL, "
+                + "request_date TEXT NOT NULL, "
+                + "time_in TEXT, "
+                + "time_out TEXT, "
+                + "status TEXT DEFAULT 'Pending'"
+                + ");";
+        try (Connection conn = connect();
+             Statement stmt = conn.createStatement()) {
+            stmt.execute(sql);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
 
     // ---------------- CREATE ATTENDANCE RECORDS TABLE ----------------
     public static void createAttendanceTable() {
@@ -97,9 +175,12 @@ public class Database {
                 + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
                 + "empNo TEXT NOT NULL, "
                 + "date TEXT NOT NULL, "
-                + "time_in TEXT NOT NULL, "
+                + "time_in TEXT, "
                 + "time_out TEXT, "
-                + "status TEXT"  // Added for marking leave, present, etc.
+                + "workday TEXT DEFAULT 'Regular', "
+                + "second_time_out TEXT, "
+                + "status TEXT,"
+                + "total_update_count INTEGER DEFAULT 0"// Added for marking leave, present, etc.
                 + ");";
 
         try (Connection conn = connect();
@@ -119,6 +200,30 @@ public class Database {
                 + "empNo TEXT NOT NULL, "
                 + "message TEXT NOT NULL, "
                 + "date TEXT DEFAULT CURRENT_DATE"
+                + ");";
+
+        try (Connection conn = connect();
+             Statement stmt = conn.createStatement()) {
+
+            stmt.execute(sql);
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+    
+ // ---------------- CREATE REQUESTS TABLE (FOR OT AND HOLIDAY) ----------------
+    public static void createRequestsTable() {
+        String sql = "CREATE TABLE IF NOT EXISTS requests ("
+                + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                + "empNo TEXT NOT NULL, "
+                + "request_type TEXT NOT NULL, "  // 'OT' or 'Holiday'
+                + "details TEXT NOT NULL, "       // For OT: hours; For Holiday: type (Special/Regular)
+                + "start_date TEXT NOT NULL, "
+                + "end_date TEXT, "                // Nullable for Holiday (no end date)
+                + "reason TEXT NOT NULL, "
+                + "status TEXT DEFAULT 'Pending', "
+                + "submitted_date TEXT DEFAULT CURRENT_DATE"
                 + ");";
 
         try (Connection conn = connect();
@@ -190,28 +295,29 @@ public class Database {
 
     // ---------------- INSERT EMPLOYEE FULL ----------------
     public static void insertEmployeeFull(
-            String empNo, String name, String address, String email,
+            String empNo, String name, String role, String address, String email,
             String contact, String position, String status,
             int salary, String password, String imagePath) {
 
         String sql = "INSERT INTO employees("
-                + "empNo, name, address, email, contact, "
+                + "empNo, name, role, address, email, contact, "
                 + "position, employmentStatus, dailyPay, password, photo_path) "
-                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         try (Connection conn = connect();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
             pstmt.setString(1, empNo);
             pstmt.setString(2, name);
-            pstmt.setString(3, address);
-            pstmt.setString(4, email);
-            pstmt.setString(5, contact);
-            pstmt.setString(6, position);
-            pstmt.setString(7, status);
-            pstmt.setInt(8, salary);
-            pstmt.setString(9, password);
-            pstmt.setString(10, imagePath);
+            pstmt.setString(3, role);
+            pstmt.setString(4, address);
+            pstmt.setString(5, email);
+            pstmt.setString(6, contact);
+            pstmt.setString(7, position);
+            pstmt.setString(8, status);
+            pstmt.setInt(9, salary);
+            pstmt.setString(10, password);
+            pstmt.setString(11, imagePath);
 
             pstmt.executeUpdate();
 
@@ -318,11 +424,11 @@ public class Database {
     }
 
     // ---------------- GET LEAVE REQUEST DETAILS FOR VIEW ----------------
-    public static ResultSet getLeaveRequestDetails(String empNo) throws SQLException {
+    public static ResultSet getLeaveRequestDetails(String requestId) throws SQLException {
         String sql = "SELECT * FROM leave_requests WHERE empNo = ?";
         Connection conn = connect();
         PreparedStatement pst = conn.prepareStatement(sql);
-        pst.setString(1, empNo);
+        pst.setString(1, requestId);
         return pst.executeQuery();
     }
 
@@ -349,7 +455,6 @@ public class Database {
         }
     }
 
-    // ---------------- PROCESS LEAVE APPROVAL (UPDATE STATUS, SEND NOTIFICATION, INSERT ATTENDANCE IF APPROVED) ----------------
  // ---------------- PROCESS LEAVE APPROVAL (UPDATE STATUS, SEND NOTIFICATION, INSERT ATTENDANCE IF APPROVED) ----------------
     public static void processLeaveApproval(int id, String status, String empNo, String startDate, String endDate, String leaveType) {
         // If approving, check leave balance first
@@ -464,6 +569,299 @@ public class Database {
         PreparedStatement pst = conn.prepareStatement(sql);
         pst.setInt(1, id);
         return pst.executeQuery();
+    }
+ 
+
+    // ---------------- INSERT OT REQUEST ----------------
+    public static void insertOTRequest(String empNo, String hours, String reason, String startDate, String endDate) {
+        String sql = "INSERT INTO requests (empNo, request_type, details, start_date, end_date, reason) VALUES (?, 'OT', ?, ?, ?, ?)";
+        try (Connection conn = connect();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, empNo);
+            pstmt.setString(2, hours);
+            pstmt.setString(3, startDate);
+            pstmt.setString(4, endDate);
+            pstmt.setString(5, reason);
+            pstmt.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    // ---------------- INSERT HOLIDAY REQUEST ----------------
+    public static void insertHolidayRequest(String empNo, String holidayType, String reason, String startDate) {
+        String sql = "INSERT INTO requests (empNo, request_type, details, start_date, reason) VALUES (?, 'Holiday', ?, ?, ?)";
+        try (Connection conn = connect();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, empNo);
+            pstmt.setString(2, holidayType);
+            pstmt.setString(3, startDate);
+            pstmt.setString(4, reason);
+            pstmt.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    // ---------------- GET RECENT REQUESTS ----------------
+    public static ResultSet getRecentRequests() throws SQLException {
+        String sql = "SELECT id, empNo, request_type, status FROM requests ORDER BY submitted_date DESC LIMIT 10";
+        Connection conn = connect();
+        return conn.createStatement().executeQuery(sql);
+    }
+
+    // ---------------- SEARCH REQUESTS BY EMPNO ----------------
+    public static ResultSet searchRequestsByEmpNo(String empNo) throws SQLException {
+        String sql = "SELECT id, empNo, request_type, status FROM requests WHERE empNo LIKE ?";
+        Connection conn = connect();
+        PreparedStatement pst = conn.prepareStatement(sql);
+        pst.setString(1, "%" + empNo + "%");
+        return pst.executeQuery();
+    }
+
+    // ---------------- GET REQUEST WITH EMPLOYEE DETAILS BY ID ----------------
+    public static ResultSet getRequestWithEmployeeDetailsById(int id) throws SQLException {
+        String sql = "SELECT r.id, r.empNo, e.name, r.request_type, r.details, r.reason, r.start_date, r.end_date, r.submitted_date, e.photo_path " +
+                     "FROM requests r JOIN employees e ON r.empNo = e.empNo WHERE r.id = ?";
+        Connection conn = connect();
+        PreparedStatement pst = conn.prepareStatement(sql);
+        pst.setInt(1, id);
+        return pst.executeQuery();
+    }
+
+ // ---------------- PROCESS REQUEST APPROVAL ----------------
+    public static void processRequestApproval(int id, String status, String empNo, String requestType, String details, String startDate, String endDate) {
+        // Update request status
+        String updateSql = "UPDATE requests SET status = ? WHERE id = ?";
+        try (Connection conn = connect();
+             PreparedStatement pst = conn.prepareStatement(updateSql)) {
+            pst.setString(1, status);
+            pst.setInt(2, id);
+            pst.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return;
+        }
+
+        // Send notification
+        String message = "Your " + requestType + " request has been " + status.toLowerCase() + ".";
+        String notifSql = "INSERT INTO notifications (empNo, message) VALUES (?, ?)";
+        try (Connection conn = connect();
+             PreparedStatement pst = conn.prepareStatement(notifSql)) {
+            pst.setString(1, empNo);
+            pst.setString(2, message);
+            pst.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        // If approved, insert into attendance_records
+        if ("Approved".equals(status)) {
+            java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+            if ("OT".equals(requestType)) {
+
+                java.time.LocalDate start = java.time.LocalDate.parse(startDate, formatter);
+                java.time.LocalDate end = (endDate != null) ? java.time.LocalDate.parse(endDate, formatter) : start;
+
+                int hours;
+                try {
+                    hours = Integer.parseInt(details);
+                } catch (NumberFormatException e) {
+                    hours = 0;
+                }
+
+                java.time.LocalTime baseTimeOut = java.time.LocalTime.of(17, 0, 0); // 05:00 PM
+                java.time.LocalTime calculatedTimeOut = baseTimeOut.plusHours(hours);
+                String timeOut = calculatedTimeOut.format(
+                    java.time.format.DateTimeFormatter.ofPattern("hh:mm:ss a")
+                );
+
+                String def = "00:00:00 AM";
+                String ot = "OT";
+
+                try (Connection conn = connect()) {
+
+                    for (java.time.LocalDate date = start; !date.isAfter(end); date = date.plusDays(1)) {
+
+                        String dateStr = date.format(formatter);
+
+                        // 1) Check if record exists
+                        String checkSql = "SELECT 1 FROM attendance_records WHERE empNo=? AND date=?";
+                        try (PreparedStatement check = conn.prepareStatement(checkSql)) {
+                            check.setString(1, empNo);
+                            check.setString(2, dateStr);
+
+                            ResultSet rs = check.executeQuery();
+
+                            if (rs.next()) {
+                                // 2) UPDATE existing record
+                                String updateSql1 = """
+                                    UPDATE attendance_records
+                                    SET workday = ?, second_time_out = ?
+                                    WHERE empNo = ? AND date = ?
+                                """;
+                                try (PreparedStatement pst = conn.prepareStatement(updateSql1)) {
+                                    pst.setString(1, ot);
+                                    pst.setString(2, timeOut);
+                                    pst.setString(3, empNo);
+                                    pst.setString(4, dateStr);
+                                    pst.executeUpdate();
+                                }
+
+                            } else {
+                                // 3) INSERT if no row exists
+                                String insertSql = """
+                                    INSERT INTO attendance_records
+                                    (empNo, date, time_in, workday, second_time_out)
+                                    VALUES (?, ?, ?, ?, ?)
+                                """;
+                                try (PreparedStatement pst = conn.prepareStatement(insertSql)) {
+                                    pst.setString(1, empNo);
+                                    pst.setString(2, dateStr);
+                                    pst.setString(3, def);
+                                    pst.setString(4, ot);
+                                    pst.setString(5, timeOut);
+                                    pst.executeUpdate();
+                                }
+                            }
+                        }
+                    }
+
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+
+            } else if ("Holiday".equals(requestType)) {
+
+                String holidayStatus = "Special".equals(details) ? "SH" : "RH";
+                String def = "00:00:00 AM";
+
+                try (Connection conn = connect()) {
+
+                    String checkSql = "SELECT 1 FROM attendance_records WHERE empNo=? AND date=?";
+                    try (PreparedStatement check = conn.prepareStatement(checkSql)) {
+                        check.setString(1, empNo);
+                        check.setString(2, startDate);
+
+                        ResultSet rs = check.executeQuery();
+
+                        if (rs.next()) {
+                            // UPDATE instead of INSERT
+                            String updateSql1 = """
+                                UPDATE attendance_records
+                                SET workday = ?
+                                WHERE empNo = ? AND date = ?
+                            """;
+                            try (PreparedStatement pst = conn.prepareStatement(updateSql1)) {
+                                pst.setString(1, holidayStatus);
+                                pst.setString(2, empNo);
+                                pst.setString(3, startDate);
+                                pst.executeUpdate();
+                            }
+                        } else {
+                            // INSERT only if no record exists
+                            String insertSql = """
+                                INSERT INTO attendance_records
+                                (empNo, date, time_in, workday)
+                                VALUES (?, ?, ?, ?)
+                            """;
+                            try (PreparedStatement pst = conn.prepareStatement(insertSql)) {
+                                pst.setString(1, empNo);
+                                pst.setString(2, startDate);
+                                pst.setString(3, def);
+                                pst.setString(4, holidayStatus);
+                                pst.executeUpdate();
+                            }
+                        }
+                    }
+
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
+ // ---------------- CREATE UNIFIED LOGIN VIEW ----------------
+    public static void createUnifiedLoginView() {
+        String sql = "CREATE VIEW IF NOT EXISTS unified_login AS "
+                + "SELECT empNo AS identifier, password, 'employee' AS login_type, name FROM employees "
+                + "UNION ALL "
+                + "SELECT username AS identifier, password, 'admin_staff' AS login_type, name FROM as_records";
+
+        try (Connection conn = connect();
+             Statement stmt = conn.createStatement()) {
+            stmt.execute(sql);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+ // NEW: Update an existing leave request (for editing pending requests)
+    public static boolean updateLeaveRequest(int id, String leaveType, String startDate, String endDate, String reason) {
+        String sql = "UPDATE leave_requests SET leave_type = ?, start_date = ?, end_date = ?, reason = ? WHERE id = ?";
+        try (Connection conn = connect();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, leaveType);
+            pstmt.setString(2, startDate);
+            pstmt.setString(3, endDate);
+            pstmt.setString(4, reason);
+            pstmt.setInt(5, id);
+            
+            int rowsAffected = pstmt.executeUpdate();
+            return rowsAffected > 0; // Return true if update was successful
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    // NEW: Delete a leave request
+    public static boolean deleteLeaveRequest(int id) {
+        String sql = "DELETE FROM leave_requests WHERE id = ?";
+        try (Connection conn = connect();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setInt(1, id);
+            
+            int rowsAffected = pstmt.executeUpdate();
+            return rowsAffected > 0; // Return true if deletion was successful
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    // IMPLEMENTED: Get a single leave request by ID (for editing)
+    public static ResultSet getLeaveRequestById(int requestId) {
+        String sql = "SELECT * FROM leave_requests WHERE id = ?";
+        try {
+            Connection conn = connect();
+            PreparedStatement pstmt = conn.prepareStatement(sql);
+            pstmt.setInt(1, requestId);
+            return pstmt.executeQuery(); // Caller must close ResultSet and PreparedStatement
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+    
+    //Update Employee by admin
+    public static boolean updateEmployeeDetails(String empNo, String position, String status, int dailyPay) {
+        String sql = "UPDATE employees SET position = ?, employmentStatus = ?, dailyPay = ? WHERE empNo = ?";
+        try (Connection conn = connect();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, position);
+            pstmt.setString(2, status);
+            pstmt.setInt(3, dailyPay);
+            pstmt.setString(4, empNo);
+            
+            int rowsAffected = pstmt.executeUpdate();
+            return rowsAffected > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 
 }

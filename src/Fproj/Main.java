@@ -1,7 +1,10 @@
 package Fproj;
 
-import javax.swing.*;
-import java.awt.*;
+import java.awt.CardLayout;
+import java.awt.Dimension;
+
+import javax.swing.JFrame;
+import javax.swing.JPanel;
 
 
 public class Main {
@@ -15,9 +18,16 @@ public class Main {
     	Database.createAttendanceTable();
     	Database.createLeaveTable();
     	Database.createNotificationsTable();
+    	Database.createRequestsTable();
+    	Database.createASRecordsTable();
+    	Database.createACRTable();
+    	Database.insertDefaultAdmin();
     	
         frame = new JFrame("Attendance & Payroll System");
         frame.setSize(1000, 500);
+        frame.setMinimumSize(new Dimension(1000, 500));
+        frame.setExtendedState(JFrame.MAXIMIZED_BOTH);  // Start maximized
+        frame.setResizable(true);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setLocationRelativeTo(null);
 
@@ -26,11 +36,10 @@ public class Main {
 
         // Add screens
         cardPanel.add(new First(), "main");
-        cardPanel.add(new Second(), "adminLogin");
-        cardPanel.add(new Third(), "employeeLogin");
-        cardPanel.add(new Admin(), "AdDashboard");
+        cardPanel.add(new Third(), "Login");
         cardPanel.add(new Employee(null), "EmpDashboard");
-       
+        cardPanel.add(new contacts(), "contacts");
+
         
         
         frame.add(cardPanel);

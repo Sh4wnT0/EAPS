@@ -1,11 +1,14 @@
 package Fproj;
 
-import javax.swing.*;
-import java.awt.*;
+import java.awt.Color;
+import java.awt.Font;
+
+import javax.swing.JLabel;
+import javax.swing.JPanel;
 
 public class EmpPayrollPanel extends JPanel {
-
-    public EmpPayrollPanel() {
+	private String empNo, empName, empPosition;
+    public EmpPayrollPanel(String empNo2) {
         setBackground(Color.WHITE);
         setLayout(null);
 
