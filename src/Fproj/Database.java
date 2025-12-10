@@ -160,6 +160,7 @@ public class Database {
                 + "time_in TEXT, "
                 + "time_out TEXT, "
                 + "status TEXT DEFAULT 'Pending'"
+          
                 + ");";
         try (Connection conn = connect();
              Statement stmt = conn.createStatement()) {
@@ -213,29 +214,107 @@ public class Database {
     }
     
  // ---------------- CREATE REQUESTS TABLE (FOR OT AND HOLIDAY) ----------------
+ // ---------------- CREATE UNIFIED REQUESTS TABLE ----------------
     public static void createRequestsTable() {
         String sql = "CREATE TABLE IF NOT EXISTS requests ("
                 + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
                 + "empNo TEXT NOT NULL, "
-                + "request_type TEXT NOT NULL, "  // 'OT' or 'Holiday'
-                + "details TEXT NOT NULL, "       // For OT: hours; For Holiday: type (Special/Regular)
-                + "start_date TEXT NOT NULL, "
-                + "end_date TEXT, "                // Nullable for Holiday (no end date)
-                + "reason TEXT NOT NULL, "
+                + "name TEXT, "
+                + "email TEXT, "               // <--- NEW COLUMN HERE
+                + "request_type TEXT NOT NULL, " 
+                + "details TEXT, "            
+                + "start_date TEXT, "         
+                + "end_date TEXT, "           
+                + "reason TEXT, "             
                 + "status TEXT DEFAULT 'Pending', "
                 + "submitted_date TEXT DEFAULT CURRENT_DATE"
                 + ");";
 
         try (Connection conn = connect();
              Statement stmt = conn.createStatement()) {
-
             stmt.execute(sql);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+ // =============================================================
+    // ================== NEW PAYSLIP METHODS ======================
+    // =============================================================
 
+    // 1. Create the Payslips Table (Call this once in your main setup)
+    public static void createPayslipsTable() {
+        String sql = "CREATE TABLE IF NOT EXISTS payslips ("
+                + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                + "empNo TEXT NOT NULL, "
+                + "period_month TEXT NOT NULL, "
+                + "period_year TEXT NOT NULL, "
+                + "total_present INTEGER, "
+                + "total_absent INTEGER, "
+                + "total_late INTEGER, "
+                + "total_undertime INTEGER, "
+                + "gross_pay REAL, "
+                + "deductions REAL, "
+                + "net_pay REAL, "
+                + "date_generated TEXT DEFAULT CURRENT_DATE"
+                + ");";
+
+        try (Connection conn = connect();
+             Statement stmt = conn.createStatement()) {
+            stmt.execute(sql);
         } catch (SQLException e) {
             e.printStackTrace();
         }
     }
 
+    // 2. Save Payslip and Send Notification
+ // Changed from 'void' to 'boolean' so we can check if it worked
+    public static boolean savePayslip(String empNo, String month, String year, 
+                                   int present, int absent, int late, int undertime, 
+                                   double gross, double ded, double net) {
+        
+        String sql = "INSERT INTO payslips (empNo, period_month, period_year, total_present, total_absent, total_late, total_undertime, gross_pay, deductions, net_pay) "
+                   + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        
+        // We also want to notify the employee
+        String notifSql = "INSERT INTO notifications (empNo, message) VALUES (?, ?)";
+        
+        try (Connection conn = connect()) {
+            
+            // 1. Insert Payslip
+            try (PreparedStatement pst = conn.prepareStatement(sql)) {
+                pst.setString(1, empNo);
+                pst.setString(2, month);
+                pst.setString(3, year);
+                pst.setInt(4, present);
+                pst.setInt(5, absent);
+                pst.setInt(6, late);
+                pst.setInt(7, undertime);
+                pst.setDouble(8, gross);
+                pst.setDouble(9, ded);
+                pst.setDouble(10, net);
+                
+                int rowsAffected = pst.executeUpdate();
+                
+                // If no rows were added, return false immediately
+                if (rowsAffected == 0) return false;
+            }
+
+            // 2. Insert Notification (Optional, but good for UX)
+            try (PreparedStatement pst = conn.prepareStatement(notifSql)) {
+                String msg = "Payslip for " + month + " " + year + " has been generated.";
+                pst.setString(1, empNo);
+                pst.setString(2, msg);
+                pst.executeUpdate();
+            }
+
+            return true; // Success!
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false; // Failed
+        }
+    }
+    
     // ---------------- INSERT ATTENDANCE RECORD ----------------
     public static void insertTimeIn(String empNo, String date, String time_in) {
         String sql = "INSERT INTO attendance_records (empNo, date, time_in) "
@@ -587,7 +666,30 @@ public class Database {
             e.printStackTrace();
         }
     }
-
+ // ---------------- GENERIC REQUEST INSERT ----------------
+    public static boolean insertRequest(String empNo, String name, String email, String type, String details, String start, String end, String reason) {
+        // Added 'email' to the query
+        String sql = "INSERT INTO requests (empNo, name, email, request_type, details, start_date, end_date, reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+        
+        try (Connection conn = connect();
+             PreparedStatement pst = conn.prepareStatement(sql)) {
+            
+            pst.setString(1, empNo);
+            pst.setString(2, name);
+            pst.setString(3, email);   // <--- Set the email here
+            pst.setString(4, type);    
+            pst.setString(5, details); 
+            pst.setString(6, start);
+            pst.setString(7, end);
+            pst.setString(8, reason);
+            
+            pst.executeUpdate();
+            return true;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
     // ---------------- INSERT HOLIDAY REQUEST ----------------
     public static void insertHolidayRequest(String empNo, String holidayType, String reason, String startDate) {
         String sql = "INSERT INTO requests (empNo, request_type, details, start_date, reason) VALUES (?, 'Holiday', ?, ?, ?)";
@@ -864,4 +966,267 @@ public class Database {
         }
     }
 
+    public static void createPasswordResetRequest(String userId, String username, String email) {
+        // 1. Check Employees Table
+        String sqlEmp = "SELECT name FROM employees WHERE empNo = ? AND email = ?";
+        // 2. Check Admin/Staff Table
+        String sqlAdmin = "SELECT name FROM as_records WHERE username = ? AND email = ?";
+
+        try (Connection conn = connect()) {
+            String foundName = null;
+            String foundRole = null;
+
+            // Check Employee
+            try (PreparedStatement pst = conn.prepareStatement(sqlEmp)) {
+                pst.setString(1, userId); 
+                pst.setString(2, email);
+                ResultSet rs = pst.executeQuery();
+                if (rs.next()) {
+                    foundName = rs.getString("name");
+                    foundRole = "Employee";
+                }
+            }
+
+            // If not found, Check Admin/Staff
+            if (foundName == null) {
+                try (PreparedStatement pst = conn.prepareStatement(sqlAdmin)) {
+                    pst.setString(1, userId);
+                    pst.setString(2, email);
+                    ResultSet rs = pst.executeQuery();
+                    if (rs.next()) {
+                        foundName = rs.getString("name");
+                        foundRole = "Admin/Staff";
+                    }
+                }
+            }
+
+            if (foundName != null) {
+                // A. INSERT INTO REQUESTS TABLE (For records)
+                insertRequest(
+                    userId, 
+                    foundName, 
+                    email, 
+                    "Password Reset", 
+                    "Role: " + foundRole, 
+                    java.time.LocalDate.now().toString(), 
+                    null, 
+                    "User forgot password"
+                );
+                
+                // B. SEND NOTIFICATION TO ADMIN (For the Dialog)
+                // This targets the username "admin" (from insertDefaultAdmin)
+                String notifMsg = "Password Reset Requested: " + foundName + " (" + userId + ")";
+                sendNotification("admin", notifMsg);
+                
+                System.out.println("Password reset request logged and Admin notified.");
+                
+            } else {
+                System.out.println("User details do not match any record.");
+            }
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+    
+ // ---------------- GET PENDING PASSWORD RESET REQUESTS ----------------
+    // Returns List of [RequestID, EmpNo, Name, Email, Date]
+    public static java.util.List<String[]> getPendingPasswordResets() {
+        java.util.List<String[]> list = new java.util.ArrayList<>();
+        String sql = "SELECT id, empNo, name, email, submitted_date FROM requests WHERE request_type = 'Password Reset' AND status = 'Pending'";
+
+        try (Connection conn = connect();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+
+            while (rs.next()) {
+                list.add(new String[]{
+                    String.valueOf(rs.getInt("id")),
+                    rs.getString("empNo"),
+                    rs.getString("name"),
+                    rs.getString("email"),
+                    rs.getString("submitted_date")
+                });
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return list;
+    }
+
+    // ---------------- UPDATE PASSWORD (FOR RESET) ----------------
+    public static void updateUserPassword(String identifier, String newPassword) {
+        // Try updating employee table first
+        String sqlEmp = "UPDATE employees SET password = ? WHERE empNo = ?";
+        // Try updating admin/staff table
+        String sqlAdmin = "UPDATE as_records SET password = ? WHERE username = ?";
+
+        try (Connection conn = connect()) {
+            boolean updated = false;
+            
+            try (PreparedStatement pst = conn.prepareStatement(sqlEmp)) {
+                pst.setString(1, newPassword);
+                pst.setString(2, identifier);
+                if (pst.executeUpdate() > 0) updated = true;
+            }
+
+            if (!updated) {
+                try (PreparedStatement pst = conn.prepareStatement(sqlAdmin)) {
+                    pst.setString(1, newPassword);
+                    pst.setString(2, identifier);
+                    pst.executeUpdate();
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+    
+    public static void performPasswordReset(String requestId, String userId, String newPassword) {
+        updateUserPassword(userId, newPassword);
+        updateRequestStatus(requestId, "Completed");
+    }
+
+    // ---------------- UPDATE REQUEST STATUS ----------------
+    public static void updateRequestStatus(String requestId, String status) {
+        String sql = "UPDATE requests SET status = ? WHERE id = ?";
+        try (Connection conn = connect();
+             PreparedStatement pst = conn.prepareStatement(sql)) {
+            pst.setString(1, status);
+            pst.setString(2, requestId);
+            pst.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+ // ---------------- GET ALL REQUESTS (FOR NOTIFICATION/DISPLAY) ----------------
+    public static List<String> getAllRequests() {
+        List<String> requestList = new ArrayList<>();
+        // Query to select relevant columns
+        String sql = "SELECT id, empNo, name, request_type, status, submitted_date FROM requests ORDER BY submitted_date DESC";
+
+        try (Connection conn = connect();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+
+            // Loop through results
+            while (rs.next()) {
+                int id = rs.getInt("id");
+                String empNo = rs.getString("empNo");
+                String name = rs.getString("name");
+                String type = rs.getString("request_type");
+                String status = rs.getString("status");
+                String date = rs.getString("submitted_date");
+
+                // Format the output string (You can customize this format)
+                String requestInfo = String.format("ID: %d | Emp: %s (%s) | Type: %s | Status: %s | Date: %s", 
+                                                   id, empNo, (name != null ? name : "N/A"), type, status, date);
+                
+                requestList.add(requestInfo);
+            }
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+            requestList.add("Error fetching requests: " + e.getMessage());
+        }
+        return requestList;
+    }
+    
+ // ---------------- GENERIC SEND NOTIFICATION ----------------
+    public static void sendNotification(String targetUser, String message) {
+        String sql = "INSERT INTO notifications (empNo, message) VALUES (?, ?)";
+        
+        try (Connection conn = connect();
+             PreparedStatement pst = conn.prepareStatement(sql)) {
+            
+            pst.setString(1, targetUser); // The empNo or Username receiving the alert
+            pst.setString(2, message);
+            pst.executeUpdate();
+            
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+ // ---------------- FETCH NOTIFICATIONS WITH DATE ----------------
+    // Returns a list of String arrays: [Message, Date]
+    public static java.util.List<String[]> getNotificationsWithDate(String empNo) {
+        java.util.List<String[]> list = new java.util.ArrayList<>();
+        String sql = "SELECT message, date FROM notifications WHERE empNo = ? ORDER BY id DESC LIMIT 20";
+
+        try (Connection conn = connect();
+             PreparedStatement pst = conn.prepareStatement(sql)) {
+
+            pst.setString(1, empNo);
+            ResultSet rs = pst.executeQuery();
+
+            while (rs.next()) {
+                list.add(new String[]{
+                    rs.getString("message"),
+                    rs.getString("date")
+                });
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return list;
+    }
+    
+    // Optional: Clear notifications
+    public static void clearNotifications(String empNo) {
+        String sql = "DELETE FROM notifications WHERE empNo = ?";
+        try (Connection conn = connect();
+             PreparedStatement pst = conn.prepareStatement(sql)) {
+            pst.setString(1, empNo);
+            pst.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+ // ---------------- CHECK USER EXISTENCE (FORGOT PASSWORD) ----------------
+    // Returns "employees", "as_records", or null
+    public static String checkUserTable(String identifier, String email) {
+        
+        // 1. Check 'employees' table first
+        // Note: employees table uses 'empNo', not 'username'. 
+        // We treat the input identifier as empNo here.
+        String empQuery = "SELECT empNo FROM employees WHERE empNo = ? AND email = ?";
+        
+        try (Connection conn = connect();
+             PreparedStatement pstmt = conn.prepareStatement(empQuery)) {
+            
+            pstmt.setString(1, identifier);
+            pstmt.setString(2, email);
+            
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                return "employees"; // Found in employees table
+            }
+            
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return "error";
+        }
+
+        // 2. If not found, check 'as_records' table
+        // Note: as_records table DOES have a 'username' column.
+        String asQuery = "SELECT username FROM as_records WHERE username = ? AND email = ?";
+        
+        try (Connection conn = connect();
+             PreparedStatement pstmt = conn.prepareStatement(asQuery)) {
+            
+            pstmt.setString(1, identifier);
+            pstmt.setString(2, email);
+            
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                return "as_records"; // Found in as_records table
+            }
+            
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return "error";
+        }
+
+        return null; // User not found in either table
+    }
 }

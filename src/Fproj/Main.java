@@ -22,6 +22,7 @@ public class Main {
     	Database.createASRecordsTable();
     	Database.createACRTable();
     	Database.insertDefaultAdmin();
+    	Database.createPayslipsTable();
     	
         frame = new JFrame("Attendance & Payroll System");
         frame.setSize(1000, 500);
@@ -39,6 +40,7 @@ public class Main {
         cardPanel.add(new Third(), "Login");
         cardPanel.add(new Employee(null), "EmpDashboard");
         cardPanel.add(new contacts(), "contacts");
+        cardPanel.add(new ForgotPasswordPanel(), "forgot"); 
 
         
         

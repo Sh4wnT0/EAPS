@@ -101,6 +101,7 @@ public class Third extends JPanel {
 
         btnForgot = new JButton("Forgot?");
         styleButton(btnForgot);
+        btnForgot.addActionListener(e -> Main.cardLayout.show(Main.cardPanel, "forgot"));
 
         buttonPanel.add(btnLogin);
         buttonPanel.add(btnForgot);

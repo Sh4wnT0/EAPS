@@ -21,6 +21,7 @@ import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
 
 public class Admin extends JPanel {
 
@@ -33,7 +34,7 @@ public class Admin extends JPanel {
     private JButton btnHome, btnProfile, btnLeaveReq, btnOTReq, btnRecords, btnAttendance, btnPayroll;
     private JButton currentSelectedButton = null;
 
-    // Panel References (Stored as fields for direct access)
+    // Panel References
     private HomePanel homePanel;
     private adProfile profilePanel;
     private LeaveApproval leavePanel;
@@ -94,44 +95,71 @@ public class Admin extends JPanel {
     private JPanel createHeader() {
         JPanel header = new JPanel(new BorderLayout());
         header.setBackground(BRAND_COLOR);
-        header.setPreferredSize(new Dimension(800, 60)); // Slightly taller for better spacing
-        header.setBorder(BorderFactory.createEmptyBorder(0, 10, 0, 10));
+        header.setPreferredSize(new Dimension(800, 65)); // Slightly taller
+        header.setBorder(BorderFactory.createEmptyBorder(0, 15, 0, 15));
 
         // LEFT: Logo and Title
-        JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 10));
+        JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 12));
         leftPanel.setOpaque(false);
 
-        // Logo Logic
         ImageIcon logoIcon = null;
         try {
             ImageIcon original = new ImageIcon(getClass().getResource("logo.png"));
-            Image img = original.getImage().getScaledInstance(50, 50, Image.SCALE_SMOOTH);
+            Image img = original.getImage().getScaledInstance(45, 45, Image.SCALE_SMOOTH);
             logoIcon = new ImageIcon(img);
-        } catch (Exception e) {
-            // Placeholder if logo missing
-        }
+        } catch (Exception e) { }
 
         JLabel lblLogo = new JLabel();
         if (logoIcon != null) lblLogo.setIcon(logoIcon);
         
         JLabel lblTitle = new JLabel("Admin Dashboard");
-        lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 20));
+        lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 22));
         lblTitle.setForeground(Color.WHITE);
 
         leftPanel.add(lblLogo);
         leftPanel.add(lblTitle);
 
         // RIGHT: Buttons
-        JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 12));
+        JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 15));
         rightPanel.setOpaque(false);
 
+        // --- BUTTON 1: NOTIFICATIONS (White Style) ---
         JButton btnNotifs = new JButton("Notifications");
-        styleHeaderButton(btnNotifs);
-        btnNotifs.addActionListener(e -> JOptionPane.showMessageDialog(this, "No new notifications."));
+        btnNotifs.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        btnNotifs.setForeground(BRAND_COLOR); // Green text
+        btnNotifs.setBackground(Color.WHITE); // Solid White bg
+        btnNotifs.setFocusPainted(false);
+        btnNotifs.setBorder(BorderFactory.createEmptyBorder(8, 15, 8, 15));
+        btnNotifs.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        
+        // Hover Effect
+        btnNotifs.addMouseListener(new MouseAdapter() {
+            public void mouseEntered(MouseEvent e) { btnNotifs.setBackground(new Color(230, 230, 230)); }
+            public void mouseExited(MouseEvent e) { btnNotifs.setBackground(Color.WHITE); }
+        });
 
+        btnNotifs.addActionListener(e -> {
+            java.awt.Window win = SwingUtilities.getWindowAncestor(this);
+            if (win instanceof java.awt.Frame) {
+                new NotificationDialog((java.awt.Frame) win, currentAdminUsername).setVisible(true);
+            }
+        });
+
+        // --- BUTTON 2: LOGOUT (Red Style) ---
         JButton btnLogout = new JButton("Logout");
-        styleHeaderButton(btnLogout);
-        btnLogout.setBackground(new Color(220, 53, 69)); // Red logout button
+        btnLogout.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        btnLogout.setForeground(Color.WHITE);
+        btnLogout.setBackground(new Color(220, 53, 69)); // Solid Red
+        btnLogout.setFocusPainted(false);
+        btnLogout.setBorder(BorderFactory.createEmptyBorder(8, 15, 8, 15));
+        btnLogout.setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+        // Hover Effect
+        btnLogout.addMouseListener(new MouseAdapter() {
+            public void mouseEntered(MouseEvent e) { btnLogout.setBackground(new Color(200, 40, 50)); }
+            public void mouseExited(MouseEvent e) { btnLogout.setBackground(new Color(220, 53, 69)); }
+        });
+
         btnLogout.addActionListener(e -> {
             int confirm = JOptionPane.showConfirmDialog(this, "Are you sure you want to logout?", "Logout", JOptionPane.YES_NO_OPTION);
             if(confirm == JOptionPane.YES_OPTION){
@@ -151,7 +179,7 @@ public class Admin extends JPanel {
     private JPanel createSidebar() {
         JPanel sidebar = new JPanel(new GridBagLayout());
         sidebar.setBackground(SIDEBAR_BG);
-        sidebar.setPreferredSize(new Dimension(220, 0)); // Wider sidebar
+        sidebar.setPreferredSize(new Dimension(220, 0));
         sidebar.setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, Color.LIGHT_GRAY));
 
         GridBagConstraints gbc = new GridBagConstraints();
@@ -159,7 +187,7 @@ public class Admin extends JPanel {
         gbc.gridy = 0;
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.weightx = 1.0;
-        gbc.insets = new Insets(5, 10, 5, 10); // Padding around buttons
+        gbc.insets = new Insets(5, 10, 5, 10);
 
         // Create Buttons
         btnHome = createMenuButton("Home", "Home.png");
@@ -188,7 +216,7 @@ public class Admin extends JPanel {
         sidebar.add(btnAttendance, gbc); gbc.gridy++;
         sidebar.add(btnPayroll, gbc); gbc.gridy++;
 
-        // Filler to push content up
+        // Filler
         GridBagConstraints gbcFiller = new GridBagConstraints();
         gbcFiller.gridy = 100;
         gbcFiller.weighty = 1.0;
@@ -202,65 +230,54 @@ public class Admin extends JPanel {
             innerCardLayout.show(innerCardPanel, "home");
             selectButton(btnHome);
         });
-
         btnProfile.addActionListener(e -> {
             innerCardLayout.show(innerCardPanel, "profile");
             selectButton(btnProfile);
         });
-
         btnLeaveReq.addActionListener(e -> {
             innerCardLayout.show(innerCardPanel, "leave");
-            leavePanel.fetchLeaveRequests(); // Direct access via field
+            leavePanel.fetchLeaveRequests(); 
             selectButton(btnLeaveReq);
         });
-
         btnOTReq.addActionListener(e -> {
             innerCardLayout.show(innerCardPanel, "ot");
-            otPanel.fetchRequests(); // Direct access via field
+            otPanel.fetchRequests(); 
             selectButton(btnOTReq);
         });
-
         btnRecords.addActionListener(e -> {
             innerCardLayout.show(innerCardPanel, "records");
             selectButton(btnRecords);
         });
-
         btnAttendance.addActionListener(e -> {
             innerCardLayout.show(innerCardPanel, "attendance");
-            attendancePanel.loadSummaryTable(); // Direct access via field
+            attendancePanel.loadSummaryTable(); 
             selectButton(btnAttendance);
         });
-
         btnPayroll.addActionListener(e -> {
             innerCardLayout.show(innerCardPanel, "payroll");
             selectButton(btnPayroll);
         });
     }
 
-    // --- Helper UI Methods ---
     private JButton createMenuButton(String text, String iconName) {
         JButton btn = new JButton(text);
-        btn.setFont(new Font("Segoe UI", Font.PLAIN, 14)); // Clean, modern font
+        btn.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         btn.setBackground(Color.WHITE);
-        btn.setForeground(new Color(60, 60, 60)); // Softer dark grey text
+        btn.setForeground(new Color(60, 60, 60));
         btn.setFocusPainted(false);
-        btn.setBorder(BorderFactory.createEmptyBorder(12, 20, 12, 10)); // Top, Left, Bottom, Right padding
+        btn.setBorder(BorderFactory.createEmptyBorder(12, 20, 12, 10));
         btn.setHorizontalAlignment(SwingConstants.LEFT);
-        btn.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
 
-        // Load and Scale Icon
-        ImageIcon icon = loadIcon(iconName, 20); // 20x20 is a good standard size
+        ImageIcon icon = loadIcon(iconName, 20);
         if (icon != null) {
             btn.setIcon(icon);
-            btn.setIconTextGap(20); // MORE space between icon and text looks cleaner
+            btn.setIconTextGap(20);
         }
-    
 
-        // Modern Hover Effect
         btn.addMouseListener(new MouseAdapter() {
             public void mouseEntered(MouseEvent e) {
                 if (btn != currentSelectedButton) {
-                    // Very subtle light green hover
                     btn.setBackground(new Color(235, 245, 240)); 
                 }
             }
@@ -270,55 +287,37 @@ public class Admin extends JPanel {
                 }
             }
         });
-
         return btn;
     }
+
     private ImageIcon loadIcon(String fileName, int size) {
         try {
             java.net.URL imgURL = getClass().getResource("/" + fileName);
             if (imgURL != null) {
                 ImageIcon originalIcon = new ImageIcon(imgURL);
                 Image img = originalIcon.getImage();
-                
-                // USE SCALE_SMOOTH for best quality when resizing
                 Image scaledImg = img.getScaledInstance(size, size, Image.SCALE_SMOOTH);
-                
                 return new ImageIcon(scaledImg);
-            } else {
-                // System.err.println("Icon not found: " + fileName);
-                return null;
             }
+            return null;
         } catch (Exception e) {
             return null;
         }
     }
 
     private void selectButton(JButton btn) {
-        // Reset previous
         if (currentSelectedButton != null) {
             currentSelectedButton.setBackground(Color.WHITE);
             currentSelectedButton.setForeground(Color.DARK_GRAY);
             currentSelectedButton.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         }
-        // Set new
         currentSelectedButton = btn;
         currentSelectedButton.setBackground(ACTIVE_COLOR);
         currentSelectedButton.setForeground(BRAND_COLOR);
         currentSelectedButton.setFont(new Font("Segoe UI", Font.BOLD, 14));
     }
 
-    private void styleHeaderButton(JButton btn) {
-        btn.setForeground(Color.WHITE);
-        btn.setBackground(new Color(255, 255, 255, 50)); // Semi-transparent
-        btn.setFocusPainted(false);
-        btn.setBorderPainted(false);
-        btn.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
-    }
-
     // --- Inner Classes ---
-
-    // Simple Dashboard Home Screen
     private class HomePanel extends JPanel {
         public HomePanel() {
             setLayout(new GridBagLayout());

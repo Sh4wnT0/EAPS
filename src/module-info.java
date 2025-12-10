@@ -9,4 +9,5 @@ module OOP {
 	requires java.sql;
 	requires jakarta.mail;
 	requires jcalendar;
+	requires java.management;
 }

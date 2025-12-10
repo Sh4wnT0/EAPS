@@ -1,315 +1,279 @@
 package Fproj;
 
-import java.awt.Color;
-import java.awt.Font;
-import java.awt.Image;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
+import java.awt.*;
 import java.io.File;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
+import java.sql.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.time.temporal.ChronoUnit;
-
-import javax.swing.BorderFactory;
-import javax.swing.ImageIcon;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JTextArea;
-import javax.swing.SwingConstants;
-import javax.swing.Timer;
+import java.util.HashSet;
+import java.util.Set;
+import javax.swing.*;
+import javax.swing.border.EmptyBorder;
 
 public class EmpHomePanel extends JPanel {
 
     private String empNo;
-    private JLabel lblDateTime;  // For real-time date and time
-    private Timer timer;         // Timer to update date/time
-    private JTextArea txtAnnouncements;  // For announcements
+    private JLabel lblTime, lblDate;
+    private JLabel lblName, lblPosition, lblEmail;
+    private JLabel lblImage;
+    
+    // Analytics Labels
+    private JLabel valWorkdays, valPresent, valLate, valUndertime, valAbsent;
 
-    // Analytics labels
-    private JLabel lblTotalWorkdays, lblTotalLates, lblUndertime, lblAbsent, lblLeaves;
-
-    private void loadEmployeeDetails() {
-        try {
-            Connection conn = DriverManager.getConnection("jdbc:sqlite:employees.db");
-
-            String sql = "SELECT name, position, email, contact, photo_path FROM employees WHERE empNo=?";
-            PreparedStatement pst = conn.prepareStatement(sql);
-            pst.setString(1, empNo);
-
-            ResultSet rs = pst.executeQuery();
-
-            if (rs.next()) {
-                String name = rs.getString("name");
-                String position = rs.getString("position");
-                String email = rs.getString("email");
-                String contact = rs.getString("contact");
-                String photoPath = rs.getString("photo_path");
-
-                // Display image on top left (100x100)
-                JLabel lblImage = new JLabel();
-                lblImage.setBounds(50, 50, 100, 100);
-                lblImage.setBorder(BorderFactory.createLineBorder(Color.GRAY));
-                if (photoPath != null && !photoPath.isEmpty()) {
-                    File imageFile = new File(photoPath);
-                    if (imageFile.exists()) {
-                        ImageIcon icon = new ImageIcon(photoPath);
-                        Image scaledImage = icon.getImage().getScaledInstance(100, 100, Image.SCALE_SMOOTH);
-                        lblImage.setIcon(new ImageIcon(scaledImage));
-                    } else {
-                        lblImage.setText("No photo available");
-                        lblImage.setHorizontalAlignment(SwingConstants.CENTER);
-                    }
-                } else {
-                    lblImage.setText("No photo available");
-                    lblImage.setHorizontalAlignment(SwingConstants.CENTER);
-                }
-                add(lblImage);
-
-                // Labels next to the image (top left area)
-                JLabel lblName = new JLabel("Name: " + name);
-                lblName.setBounds(170, 50, 300, 25);
-                lblName.setFont(new Font("Arial", Font.PLAIN, 16));
-                add(lblName);
-
-                JLabel lblEmpNo = new JLabel("Employee No: " + empNo);
-                lblEmpNo.setBounds(170, 80, 300, 25);
-                lblEmpNo.setFont(new Font("Arial", Font.PLAIN, 16));
-                add(lblEmpNo);
-
-                JLabel lblPosition = new JLabel("Position: " + position);
-                lblPosition.setBounds(170, 110, 300, 25);
-                lblPosition.setFont(new Font("Arial", Font.PLAIN, 16));
-                add(lblPosition);
-            }
-
-            rs.close();
-            pst.close();
-            conn.close();
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    // Method to load attendance analytics for the current month
-    private void loadAttendanceAnalytics() {
-        LocalDate now = LocalDate.now();
-        LocalDate startOfMonth = now.withDayOfMonth(1);
-        LocalDate endOfMonth = now.withDayOfMonth(now.lengthOfMonth());
-
-        // Calculate total workdays (weekdays only, entire month)
-        int totalWorkdays = 0;
-        for (LocalDate date = startOfMonth; !date.isAfter(endOfMonth); date = date.plusDays(1)) {
-            if (isWeekday(date)) {
-                totalWorkdays++;
-            }
-        }
-
-        int totalLates = 0;
-        int undertime = 0;
-        int absent = 0;
-        int leaves = 0;
-
-        try {
-            Connection conn = DriverManager.getConnection("jdbc:sqlite:employees.db");
-            
-            // Fetch attendance records for the current month
-            String sql = "SELECT date, status FROM attendance_records WHERE empNo = ? AND date BETWEEN ? AND ?";
-            PreparedStatement pst = conn.prepareStatement(sql);
-            pst.setString(1, empNo);
-            pst.setString(2, startOfMonth.toString());
-            pst.setString(3, endOfMonth.toString());
-
-            ResultSet rs = pst.executeQuery();
-            
-            // Track recorded workdays
-            java.util.Set<String> recordedDays = new java.util.HashSet<>();
-            
-            while (rs.next()) {
-                String dateStr = rs.getString("date");
-                LocalDate date = LocalDate.parse(dateStr);
-                String status = rs.getString("status");
-
-                if (isWeekday(date)) {
-                    recordedDays.add(dateStr);
-
-                    // Count based on status
-                    if ("Late and Undertime".equalsIgnoreCase(status)) {
-                        totalLates++;
-                        undertime++;
-                    } else if ("UL".equalsIgnoreCase(status)) {
-                        absent++;
-                    } else if ("Leave".equalsIgnoreCase(status)) {
-                        leaves++;
-                    }
-                    // Other statuses (e.g., "Present") are not counted in these metrics
-                }
-            }
-
-            rs.close();
-            pst.close();
-            conn.close();
-
-            // Calculate absent: workdays from start of month to today (current day) with no record (plus any "UL" already counted)
-            for (LocalDate date = startOfMonth; !date.isAfter(now); date = date.plusDays(1)) {
-                if (isWeekday(date)) {
-                    String dateStr = date.toString();
-                    if (!recordedDays.contains(dateStr)) {
-                        absent++;
-                    }
-                }
-            }
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-        // Update labels
-        lblTotalWorkdays.setText("Total Workdays: " + totalWorkdays);
-        lblTotalLates.setText("Total Lates: " + totalLates);
-        lblUndertime.setText("Undertime: " + undertime);
-        lblAbsent.setText("Absent: " + absent);
-        lblLeaves.setText("Leaves: " + leaves);
-    }
-
-    // Method to load announcements from database (optional)
-    private void loadAnnouncements() {
-        try {
-            Connection conn = DriverManager.getConnection("jdbc:sqlite:employees.db");
-            String sql = "SELECT title, message, date FROM announcements ORDER BY date DESC LIMIT 5";  // Example: Get latest 5
-            PreparedStatement pst = conn.prepareStatement(sql);
-            ResultSet rs = pst.executeQuery();
-
-            StringBuilder announcements = new StringBuilder();
-            while (rs.next()) {
-                announcements.append(rs.getString("date")).append(" - ").append(rs.getString("title")).append("\n")
-                             .append(rs.getString("message")).append("\n\n");
-            }
-            txtAnnouncements.setText(announcements.toString());
-
-            rs.close();
-            pst.close();
-            conn.close();
-        } catch (Exception e) {
-            e.printStackTrace();
-            txtAnnouncements.setText("Error loading announcements.");
-        }
-    }
+    // UI Constants
+    private final Color BRAND_COLOR = new Color(22, 102, 87);
+    private final Font CLOCK_FONT = new Font("Segoe UI", Font.BOLD, 42);
+    private final Font DATE_FONT = new Font("Segoe UI", Font.PLAIN, 18);
+    private final Font CARD_TITLE_FONT = new Font("Segoe UI", Font.BOLD, 14);
+    private final Font CARD_VAL_FONT = new Font("Segoe UI", Font.BOLD, 24);
 
     public EmpHomePanel(String empNo) {
         this.empNo = empNo;
+        setLayout(new BorderLayout(20, 20));
+        setBackground(new Color(245, 245, 245));
+        setBorder(new EmptyBorder(25, 25, 25, 25));
 
-        setBackground(Color.WHITE);
-        setLayout(null);
+        // --- 1. TOP SECTION: Profile + Digital Clock ---
+        JPanel topPanel = new JPanel(new GridLayout(1, 2, 20, 0));
+        topPanel.setOpaque(false);
+        topPanel.setPreferredSize(new Dimension(0, 180));
 
-        JLabel lbl = new JLabel("Welcome Employee No: " + empNo);
-        lbl.setFont(new Font("Arial", Font.BOLD, 22));
-        lbl.setBounds(300, 10, 500, 40);  // Adjusted to center-ish, below the top elements
-        add(lbl);
+        // Left: Profile Card
+        JPanel profileCard = new JPanel(new BorderLayout(15, 0));
+        profileCard.setBackground(Color.WHITE);
+        profileCard.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(Color.LIGHT_GRAY),
+            new EmptyBorder(15, 15, 15, 15)
+        ));
+
+        lblImage = new JLabel("No Photo", SwingConstants.CENTER);
+        lblImage.setPreferredSize(new Dimension(110, 110));
+        lblImage.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY));
         
+        JPanel infoPanel = new JPanel(new GridLayout(4, 1, 0, 5));
+        infoPanel.setBackground(Color.WHITE);
+        
+        JLabel lblWelcome = new JLabel("Welcome back,");
+        lblWelcome.setForeground(Color.GRAY);
+        lblName = new JLabel("Loading...");
+        lblName.setFont(new Font("Segoe UI", Font.BOLD, 20));
+        lblName.setForeground(BRAND_COLOR);
+        
+        lblPosition = new JLabel("Position: --");
+        lblEmail = new JLabel("Email: --");
+        
+        infoPanel.add(lblWelcome);
+        infoPanel.add(lblName);
+        infoPanel.add(lblPosition);
+        infoPanel.add(lblEmail);
+
+        profileCard.add(lblImage, BorderLayout.WEST);
+        profileCard.add(infoPanel, BorderLayout.CENTER);
+
+        // Right: Digital Clock Card
+        JPanel clockCard = new JPanel(new BorderLayout());
+        clockCard.setBackground(BRAND_COLOR);
+        clockCard.setBorder(new EmptyBorder(20, 0, 20, 0));
+        
+        lblTime = new JLabel("--:--:--", SwingConstants.CENTER);
+        lblTime.setFont(CLOCK_FONT);
+        lblTime.setForeground(Color.WHITE);
+        
+        lblDate = new JLabel("----, -- -- ----", SwingConstants.CENTER);
+        lblDate.setFont(DATE_FONT);
+        lblDate.setForeground(new Color(220, 220, 220));
+        
+        clockCard.add(lblTime, BorderLayout.CENTER);
+        clockCard.add(lblDate, BorderLayout.SOUTH);
+
+        topPanel.add(profileCard);
+        topPanel.add(clockCard);
+        add(topPanel, BorderLayout.NORTH);
+
+        // --- 2. CENTER SECTION: Analytics Dashboard ---
+        JPanel centerPanel = new JPanel(new BorderLayout(0, 15));
+        centerPanel.setOpaque(false);
+        
+        JLabel lblDashTitle = new JLabel("Monthly Attendance Overview");
+        lblDashTitle.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        lblDashTitle.setForeground(new Color(80, 80, 80));
+        centerPanel.add(lblDashTitle, BorderLayout.NORTH);
+
+        JPanel statsGrid = new JPanel(new GridLayout(1, 5, 15, 0));
+        statsGrid.setOpaque(false);
+        statsGrid.setPreferredSize(new Dimension(0, 120));
+
+        // Create Stat Cards
+        valWorkdays = new JLabel("0");
+        valPresent = new JLabel("0");
+        valLate = new JLabel("0");
+        valUndertime = new JLabel("0");
+        valAbsent = new JLabel("0");
+
+        statsGrid.add(createStatCard("Work Days", valWorkdays, new Color(230, 240, 255))); // Blue
+        statsGrid.add(createStatCard("Present", valPresent, new Color(220, 255, 220)));   // Green
+        statsGrid.add(createStatCard("Late", valLate, new Color(255, 245, 200)));         // Yellow
+        statsGrid.add(createStatCard("Undertime", valUndertime, new Color(255, 235, 215))); // Orange
+        statsGrid.add(createStatCard("Absent", valAbsent, new Color(255, 220, 220)));     // Red
+
+        centerPanel.add(statsGrid, BorderLayout.CENTER);
+        add(centerPanel, BorderLayout.CENTER);
+
+        // --- 3. BOTTOM SECTION: Announcements ---
+        JPanel bottomPanel = new JPanel(new BorderLayout(0, 10));
+        bottomPanel.setOpaque(false);
+        bottomPanel.setPreferredSize(new Dimension(0, 200));
+        
+        JLabel lblAnnounce = new JLabel("Company Announcements");
+        lblAnnounce.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        bottomPanel.add(lblAnnounce, BorderLayout.NORTH);
+        
+        JTextArea txtAnnounce = new JTextArea();
+        txtAnnounce.setEditable(false);
+        txtAnnounce.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        txtAnnounce.setLineWrap(true);
+        txtAnnounce.setWrapStyleWord(true);
+        txtAnnounce.setText("• Payday is this Friday (15th).\n• Monthly Meeting: Monday at 10:00 AM in Conference Room A.\n• Reminder: Submit all leave requests by Wednesday.");
+        txtAnnounce.setBorder(new EmptyBorder(10, 10, 10, 10));
+        
+        JScrollPane scroll = new JScrollPane(txtAnnounce);
+        scroll.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY));
+        bottomPanel.add(scroll, BorderLayout.CENTER);
+        
+        add(bottomPanel, BorderLayout.SOUTH);
+
+        // --- Start Logic ---
+        startClock();
         loadEmployeeDetails();
+        loadAnalytics();
+    }
 
-        // Date and time label in top right
-        lblDateTime = new JLabel();
-        lblDateTime.setBounds(600, 50, 200, 25);  // Top right position
-        lblDateTime.setFont(new Font("Arial", Font.PLAIN, 14));
-        add(lblDateTime);
+    // --- UI Helper: Create Stat Card ---
+    private JPanel createStatCard(String title, JLabel valueLabel, Color bg) {
+        JPanel p = new JPanel(new BorderLayout());
+        p.setBackground(Color.WHITE);
+        p.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY));
+        
+        // Title Header
+        JLabel lblTitle = new JLabel(title, SwingConstants.CENTER);
+        lblTitle.setFont(CARD_TITLE_FONT);
+        lblTitle.setForeground(new Color(100, 100, 100));
+        lblTitle.setBorder(new EmptyBorder(10, 0, 5, 0));
+        
+        // Value Center
+        valueLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        valueLabel.setFont(CARD_VAL_FONT);
+        valueLabel.setForeground(BRAND_COLOR);
+        
+        // Footer Strip (Color Code)
+        JPanel strip = new JPanel();
+        strip.setBackground(bg);
+        strip.setPreferredSize(new Dimension(0, 5));
 
-        // Timer to update date/time every second
-        timer = new Timer(1000, new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                updateDateTime();
-            }
+        p.add(lblTitle, BorderLayout.NORTH);
+        p.add(valueLabel, BorderLayout.CENTER);
+        p.add(strip, BorderLayout.SOUTH);
+        return p;
+    }
+
+    // --- LOGIC: Digital Clock ---
+    private void startClock() {
+        Timer timer = new Timer(1000, e -> {
+            LocalDateTime now = LocalDateTime.now();
+            lblTime.setText(now.format(DateTimeFormatter.ofPattern("HH:mm:ss")));
+            lblDate.setText(now.format(DateTimeFormatter.ofPattern("EEEE, MMMM dd, yyyy")));
         });
         timer.start();
-        updateDateTime();  // Initial update
-
-        // Analytics Dashboard Section
-        JLabel lblAnalyticsTitle = new JLabel("Attendance Analytics (Current Month)", SwingConstants.CENTER);
-        lblAnalyticsTitle.setFont(new Font("Arial", Font.BOLD, 18));
-        lblAnalyticsTitle.setBounds(50, 170, 700, 30);
-        add(lblAnalyticsTitle);
-
-        // Analytics labels (card-like display)
-        lblTotalWorkdays = new JLabel("Total Workdays: --", SwingConstants.CENTER);
-        lblTotalWorkdays.setFont(new Font("Arial", Font.BOLD, 16));
-        lblTotalWorkdays.setBounds(50, 210, 150, 50);
-        lblTotalWorkdays.setBorder(BorderFactory.createLineBorder(Color.GRAY));
-        lblTotalWorkdays.setOpaque(true);
-        lblTotalWorkdays.setBackground(new Color(240, 248, 255));
-        add(lblTotalWorkdays);
-
-        lblTotalLates = new JLabel("Total Lates: --", SwingConstants.CENTER);
-        lblTotalLates.setFont(new Font("Arial", Font.BOLD, 16));
-        lblTotalLates.setBounds(220, 210, 150, 50);
-        lblTotalLates.setBorder(BorderFactory.createLineBorder(Color.GRAY));
-        lblTotalLates.setOpaque(true);
-        lblTotalLates.setBackground(new Color(255, 240, 245));
-        add(lblTotalLates);
-
-        lblUndertime = new JLabel("Undertime: --", SwingConstants.CENTER);
-        lblUndertime.setFont(new Font("Arial", Font.BOLD, 16));
-        lblUndertime.setBounds(390, 210, 150, 50);
-        lblUndertime.setBorder(BorderFactory.createLineBorder(Color.GRAY));
-        lblUndertime.setOpaque(true);
-        lblUndertime.setBackground(new Color(255, 250, 205));
-        add(lblUndertime);
-
-        lblAbsent = new JLabel("Absent: --", SwingConstants.CENTER);
-        lblAbsent.setFont(new Font("Arial", Font.BOLD, 16));
-        lblAbsent.setBounds(560, 210, 150, 50);
-        lblAbsent.setBorder(BorderFactory.createLineBorder(Color.GRAY));
-        lblAbsent.setOpaque(true);
-        lblAbsent.setBackground(new Color(255, 228, 225));
-        add(lblAbsent);
-
-        lblLeaves = new JLabel("Leaves: --", SwingConstants.CENTER);
-        lblLeaves.setFont(new Font("Arial", Font.BOLD, 16));
-        lblLeaves.setBounds(50, 270, 150, 50);  // Below the first row
-        lblLeaves.setBorder(BorderFactory.createLineBorder(Color.GRAY));
-        lblLeaves.setOpaque(true);
-        lblLeaves.setBackground(new Color(240, 255, 240));
-        add(lblLeaves);
-
-        // Load analytics data
-        loadAttendanceAnalytics();
-
-        // Announcements section at the bottom (adjusted position)
-        JLabel lblAnnouncementsTitle = new JLabel("Announcements", SwingConstants.CENTER);
-        lblAnnouncementsTitle.setFont(new Font("Arial", Font.BOLD, 18));
-        lblAnnouncementsTitle.setBounds(50, 340, 700, 30);  // Moved down
-        add(lblAnnouncementsTitle);
-
-        txtAnnouncements = new JTextArea();
-        txtAnnouncements.setEditable(false);
-        txtAnnouncements.setBackground(new Color(250, 250, 250));  // Light gray background
-        txtAnnouncements.setFont(new Font("Arial", Font.PLAIN, 14));
-        txtAnnouncements.setText("• Company Meeting on Friday at 10 AM.\n• New Policy Update: Check your email.\n• Holiday Reminder: Office closed on Monday.\n\n(No new announcements.)");  // Placeholder text
-
-        JScrollPane scrollPane = new JScrollPane(txtAnnouncements);
-        scrollPane.setBounds(50, 380, 700, 150);  // Moved down
-        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
-        add(scrollPane);
-
-        // Optional: Load announcements from DB (uncomment if you have the table)
-        // loadAnnouncements();
     }
 
-    // Method to update the date and time label
-    private void updateDateTime() {
-        LocalDateTime now = LocalDateTime.now();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        lblDateTime.setText(now.format(formatter));
+    // --- LOGIC: Employee Info ---
+    private void loadEmployeeDetails() {
+        String sql = "SELECT name, position, email, photo_path FROM employees WHERE empNo=?";
+        try (Connection conn = Database.connect(); // Use your Database class
+             PreparedStatement pst = conn.prepareStatement(sql)) {
+            
+            pst.setString(1, empNo);
+            ResultSet rs = pst.executeQuery();
+
+            if (rs.next()) {
+                lblName.setText(rs.getString("name"));
+                lblPosition.setText("Position: " + rs.getString("position"));
+                lblEmail.setText("Email: " + rs.getString("email"));
+                
+                String path = rs.getString("photo_path");
+                if (path != null && new File(path).exists()) {
+                    ImageIcon icon = new ImageIcon(path);
+                    Image img = icon.getImage().getScaledInstance(110, 110, Image.SCALE_SMOOTH);
+                    lblImage.setIcon(new ImageIcon(img));
+                    lblImage.setText("");
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
-    // Helper to check if a date is a weekday (Monday to Friday)
+    // --- LOGIC: Attendance Analytics ---
+    private void loadAnalytics() {
+        LocalDate today = LocalDate.now();
+        LocalDate start = today.withDayOfMonth(1);
+        LocalDate end = today.withDayOfMonth(today.lengthOfMonth());
+
+        // 1. Calculate Workdays (M-F) so far this month
+        int workDaysSoFar = 0;
+        for (LocalDate date = start; !date.isAfter(today); date = date.plusDays(1)) {
+            if (isWeekday(date)) workDaysSoFar++;
+        }
+        valWorkdays.setText(String.valueOf(workDaysSoFar));
+
+        // 2. Fetch Records from DB
+        int present = 0, late = 0, under = 0, absent = 0;
+        Set<String> recordedDates = new HashSet<>();
+
+        String sql = "SELECT date, status FROM attendance_records WHERE empNo = ? AND date BETWEEN ? AND ?";
+        try (Connection conn = Database.connect();
+             PreparedStatement pst = conn.prepareStatement(sql)) {
+            
+            pst.setString(1, empNo);
+            pst.setString(2, start.toString());
+            pst.setString(3, end.toString());
+            ResultSet rs = pst.executeQuery();
+
+            while (rs.next()) {
+                String dStr = rs.getString("date");
+                String status = rs.getString("status");
+                recordedDates.add(dStr);
+
+                // Count logic based on status string
+                if (status != null) {
+                    if (status.contains("Late")) late++;
+                    if (status.contains("Undertime")) under++;
+                    
+                    if ("Absent".equalsIgnoreCase(status)) {
+                        absent++; // Explicitly marked absent
+                    } else if (!"Leave".equalsIgnoreCase(status)) {
+                        present++; // Present if not absent/leave
+                    }
+                }
+            }
+        } catch (Exception e) { e.printStackTrace(); }
+
+        // 3. Auto-detect unrecorded absences
+        // If a workday passed and no record exists, count as Absent
+        for (LocalDate date = start; date.isBefore(today); date = date.plusDays(1)) {
+            if (isWeekday(date) && !recordedDates.contains(date.toString())) {
+                absent++;
+            }
+        }
+
+        // 4. Update UI
+        valPresent.setText(String.valueOf(present));
+        valLate.setText(String.valueOf(late));
+        valUndertime.setText(String.valueOf(under));
+        valAbsent.setText(String.valueOf(absent));
+    }
+
     private boolean isWeekday(LocalDate date) {
         java.time.DayOfWeek day = date.getDayOfWeek();
         return day != java.time.DayOfWeek.SATURDAY && day != java.time.DayOfWeek.SUNDAY;

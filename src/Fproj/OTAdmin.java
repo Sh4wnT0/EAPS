@@ -1,40 +1,14 @@
 package Fproj;
 
-import java.awt.BorderLayout;
-import java.awt.Color;
-import java.awt.Component;
-import java.awt.Font;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.awt.Image;
-import java.awt.Insets;
-import java.awt.event.ActionEvent;
-import java.awt.event.ComponentAdapter;
-import java.awt.event.ComponentEvent;
+import java.awt.*;
+import java.awt.event.*;
 import java.io.File;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
-
-import javax.swing.BorderFactory;
-import javax.swing.DefaultCellEditor;
-import javax.swing.ImageIcon;
-import javax.swing.JButton;
-import javax.swing.JCheckBox;
-import javax.swing.JComboBox;
-import javax.swing.JDialog;
-import javax.swing.JLabel;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JTable;
-import javax.swing.JTextField;
-import javax.swing.SwingConstants;
-import javax.swing.table.DefaultTableModel;
-import javax.swing.table.TableCellRenderer;
+import javax.swing.*;
+import javax.swing.border.EmptyBorder;
+import javax.swing.table.*;
 
 public class OTAdmin extends JPanel {
 
@@ -44,42 +18,63 @@ public class OTAdmin extends JPanel {
     private JComboBox<String> cbTypeFilter;
     private JComboBox<String> cbStatusFilter;
 
-    private final Color BRAND_COLOR = new Color(22, 102, 87);
+    // --- UI CONSTANTS ---
+    private final Color PRIMARY_COLOR = new Color(22, 102, 87);
+    private final Font HEADER_FONT = new Font("Segoe UI", Font.BOLD, 13);
+    private final Font CELL_FONT = new Font("Segoe UI", Font.PLAIN, 13);
 
     public OTAdmin() {
-        setLayout(new BorderLayout());
-        setBackground(Color.WHITE);
+        setLayout(new BorderLayout(20, 20));
+        setBackground(new Color(245, 245, 245));
+        setBorder(new EmptyBorder(20, 20, 20, 20));
 
-        // --- 1. Top Panel: Title & Search ---
-        JPanel topPanel = new JPanel(new GridBagLayout());
-        topPanel.setBackground(Color.WHITE);
-        GridBagConstraints gbcTop = new GridBagConstraints();
-        gbcTop.insets = new Insets(10, 10, 10, 10);
+        // ================= TOP PANEL =================
+        JPanel topPanel = new JPanel(new BorderLayout());
+        topPanel.setOpaque(false);
 
         // Title
-        JLabel lblTitle = new JLabel("OT/Holiday Requests Approval");
-        lblTitle.setFont(new Font("Arial", Font.BOLD, 18));
-        gbcTop.gridx = 0; gbcTop.gridy = 0; gbcTop.gridwidth = 4; gbcTop.anchor = GridBagConstraints.WEST;
-        topPanel.add(lblTitle, gbcTop);
+        JLabel lblTitle = new JLabel("OT/Holiday Requests");
+        lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 26));
+        lblTitle.setForeground(new Color(50, 50, 50));
+        topPanel.add(lblTitle, BorderLayout.WEST);
 
-        // Search Label
-        JLabel lblSearch = new JLabel("Search by Emp No:");
-        gbcTop.gridx = 0; gbcTop.gridy = 1; gbcTop.gridwidth = 1;
-        topPanel.add(lblSearch, gbcTop);
+        // --- Action Bar (Filters + Search) ---
+        JPanel actionPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        actionPanel.setOpaque(false);
+
+        // Filters
+        cbTypeFilter = new JComboBox<>(new String[]{"All", "OT", "Holiday"});
+        styleComboBox(cbTypeFilter);
+        cbTypeFilter.addActionListener(e -> fetchRequests());
+
+        cbStatusFilter = new JComboBox<>(new String[]{"All", "Pending", "Approved", "Rejected"});
+        styleComboBox(cbStatusFilter);
+        cbStatusFilter.addActionListener(e -> fetchRequests());
 
         // Search Field
-        txtSearchEmpNo = new JTextField();
-        gbcTop.gridx = 1; gbcTop.fill = GridBagConstraints.HORIZONTAL; gbcTop.weightx = 1.0;
-        topPanel.add(txtSearchEmpNo, gbcTop);
+        txtSearchEmpNo = new JTextField(15);
+        putPlaceholder(txtSearchEmpNo, "Search Emp No...");
+        txtSearchEmpNo.setPreferredSize(new Dimension(150, 35));
 
         // Search Button
         JButton btnSearch = new JButton("Search");
-        styleButton(btnSearch);
+        styleButton(btnSearch, PRIMARY_COLOR);
         btnSearch.addActionListener(e -> fetchRequests());
-        gbcTop.gridx = 2; gbcTop.fill = GridBagConstraints.NONE; gbcTop.weightx = 0;
-        topPanel.add(btnSearch, gbcTop);
 
-        // --- 2. Table Setup (With Hidden Columns for Optimization) ---
+        // Add to Action Panel
+        actionPanel.add(new JLabel("Type:"));
+        actionPanel.add(cbTypeFilter);
+        actionPanel.add(Box.createHorizontalStrut(10));
+        actionPanel.add(new JLabel("Status:"));
+        actionPanel.add(cbStatusFilter);
+        actionPanel.add(Box.createHorizontalStrut(15));
+        actionPanel.add(txtSearchEmpNo);
+        actionPanel.add(btnSearch);
+
+        topPanel.add(actionPanel, BorderLayout.EAST);
+        add(topPanel, BorderLayout.NORTH);
+
+        // ================= CENTER TABLE =================
         // Indices: 
         // 0=Select, 1=ID, 2=Date, 3=Name, 4=EmpNo, 5=Type, 6=Status, 7=View
         // Hidden: 8=Details, 9=StartDate, 10=EndDate
@@ -93,7 +88,6 @@ public class OTAdmin extends JPanel {
             public Class<?> getColumnClass(int column) {
                 return column == 0 ? Boolean.class : super.getColumnClass(column);
             }
-
             @Override
             public boolean isCellEditable(int row, int column) {
                 return column == 0 || column == 7; // Only Select and View
@@ -104,17 +98,18 @@ public class OTAdmin extends JPanel {
             @Override
             public Component prepareRenderer(TableCellRenderer renderer, int row, int column) {
                 Component c = super.prepareRenderer(renderer, row, column);
-                if (column != 0 && column != 7) { // Skip Checkbox and Button
-                    String status = (String) getValueAt(row, 6); // Status is col 6
+                if (column != 0 && column != 7) { 
+                    String status = (String) getValueAt(row, 6); 
                     if (!isRowSelected(row)) {
+                        // Preserved Logic: Background Color based on Status
                         if ("Approved".equalsIgnoreCase(status)) {
-                            c.setBackground(new Color(63, 255, 38, 178));
+                            c.setBackground(new Color(200, 255, 200)); // Light Green
                             c.setForeground(Color.BLACK);
                         } else if ("Rejected".equalsIgnoreCase(status)) {
-                            c.setBackground(new Color(255, 32, 32, 178));
-                            c.setForeground(Color.WHITE);
+                            c.setBackground(new Color(255, 200, 200)); // Light Red
+                            c.setForeground(Color.BLACK);
                         } else if ("Pending".equalsIgnoreCase(status)) {
-                            c.setBackground(new Color(255, 247, 5, 178));
+                            c.setBackground(new Color(255, 255, 200)); // Light Yellow
                             c.setForeground(Color.BLACK);
                         } else {
                             c.setBackground(Color.WHITE);
@@ -126,81 +121,79 @@ public class OTAdmin extends JPanel {
             }
         };
 
-        // --- 3. Hide Optimization Columns & ID ---
-        int[] hiddenCols = {1, 8, 9, 10}; // ID, Details, Start, End
+        // --- TABLE STYLING ---
+        table.setRowHeight(45);
+        table.setFont(CELL_FONT);
+        table.setShowGrid(true);
+        table.setGridColor(Color.LIGHT_GRAY);
+        table.setIntercellSpacing(new Dimension(1, 1));
+        table.setFillsViewportHeight(true);
+        table.setSelectionBackground(new Color(230, 240, 255));
+        table.setSelectionForeground(Color.BLACK);
+
+        // Header Styling
+        JTableHeader header = table.getTableHeader();
+        header.setFont(HEADER_FONT);
+        header.setBackground(PRIMARY_COLOR);
+        header.setForeground(Color.WHITE);
+        header.setPreferredSize(new Dimension(0, 40));
+        header.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, Color.BLACK));
+
+        // --- COLUMN SIZING & HIDING ---
+        int[] hiddenCols = {1, 8, 9, 10}; 
+        TableColumnModel cm = table.getColumnModel();
+        
+        // Hide Columns
         for (int col : hiddenCols) {
-            table.getColumnModel().getColumn(col).setMinWidth(0);
-            table.getColumnModel().getColumn(col).setMaxWidth(0);
-            table.getColumnModel().getColumn(col).setWidth(0);
+            cm.getColumn(col).setMinWidth(0);
+            cm.getColumn(col).setMaxWidth(0);
+            cm.getColumn(col).setWidth(0);
         }
 
-        table.setRowHeight(30);
-        table.getColumn("View").setMaxWidth(80);
-        table.getColumn("View").setMinWidth(80);
+        // Specific Widths
+        cm.getColumn(0).setMaxWidth(60); // Select
+        cm.getColumn(0).setMinWidth(60);
+        
+        cm.getColumn(4).setPreferredWidth(100); // Emp No
+        cm.getColumn(3).setPreferredWidth(250); // Name
+        
+        cm.getColumn(7).setMaxWidth(90); // View
+        cm.getColumn(7).setMinWidth(90);
 
-        // Renderers & Editors
+        // Renderers
+        DefaultTableCellRenderer centerRenderer = new DefaultTableCellRenderer();
+        centerRenderer.setBorder(new EmptyBorder(0, 5, 0, 0));
+        table.getColumnModel().getColumn(3).setCellRenderer(centerRenderer);
+
         table.getColumn("Select").setCellRenderer(new CheckBoxRenderer());
         table.getColumn("Select").setCellEditor(new DefaultCellEditor(new JCheckBox()));
         table.getColumn("View").setCellRenderer(new ButtonRenderer());
         table.getColumn("View").setCellEditor(new ButtonEditor(new JCheckBox()));
 
-        // --- 4. Filter Panel ---
-        JPanel filterPanel = new JPanel(new GridBagLayout());
-        filterPanel.setBackground(Color.LIGHT_GRAY);
-        filterPanel.setBorder(BorderFactory.createMatteBorder(1, 1, 0, 1, Color.GRAY));
-        GridBagConstraints gbcFilter = new GridBagConstraints();
-        gbcFilter.insets = new Insets(5, 5, 5, 5);
+        JScrollPane scroll = new JScrollPane(table);
+        scroll.setBorder(BorderFactory.createLineBorder(Color.GRAY));
+        scroll.getViewport().setBackground(Color.WHITE);
+        add(scroll, BorderLayout.CENTER);
 
-        // Spacer
-        gbcFilter.gridx = 0; gbcFilter.weightx = 1.0; 
-        filterPanel.add(new JLabel(""), gbcFilter);
-
-        // Type Filter
-        gbcFilter.gridx = 1; gbcFilter.weightx = 0;
-        filterPanel.add(new JLabel("Request Type:"), gbcFilter);
-        cbTypeFilter = new JComboBox<>(new String[]{"All", "OT", "Holiday"});
-        cbTypeFilter.addActionListener(e -> fetchRequests());
-        gbcFilter.gridx = 2;
-        filterPanel.add(cbTypeFilter, gbcFilter);
-
-        // Status Filter
-        gbcFilter.gridx = 3;
-        filterPanel.add(new JLabel("Status:"), gbcFilter);
-        cbStatusFilter = new JComboBox<>(new String[]{"All", "Pending", "Approved", "Rejected"});
-        cbStatusFilter.addActionListener(e -> fetchRequests());
-        gbcFilter.gridx = 4;
-        filterPanel.add(cbStatusFilter, gbcFilter);
-
-        // Table Container
-        JPanel tableContainer = new JPanel(new BorderLayout());
-        tableContainer.add(filterPanel, BorderLayout.NORTH);
-        tableContainer.add(new JScrollPane(table), BorderLayout.CENTER);
-
-        // --- 5. Bottom Panel (Bulk Actions) ---
-        JPanel bottomPanel = new JPanel();
-        bottomPanel.setBackground(Color.WHITE);
+        // ================= BOTTOM PANEL =================
+        JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        bottomPanel.setBackground(new Color(245, 245, 245));
 
         JButton btnBulkApprove = new JButton("Bulk Approve Selected");
-        styleButton(btnBulkApprove);
+        styleButton(btnBulkApprove, new Color(22, 102, 87)); // Green
         btnBulkApprove.addActionListener(e -> bulkProcess("Approved"));
 
         JButton btnBulkReject = new JButton("Bulk Reject Selected");
-        styleButton(btnBulkReject);
-        btnBulkReject.setBackground(new Color(220, 53, 69)); // Red
+        styleButton(btnBulkReject, new Color(220, 53, 69)); // Red
         btnBulkReject.addActionListener(e -> bulkProcess("Rejected"));
 
         bottomPanel.add(btnBulkApprove);
         bottomPanel.add(btnBulkReject);
-
-        // Assemble Layout
-        add(topPanel, BorderLayout.NORTH);
-        add(tableContainer, BorderLayout.CENTER);
         add(bottomPanel, BorderLayout.SOUTH);
 
         // Initial Load
         fetchRequests();
 
-        // Reload on Show
         addComponentListener(new ComponentAdapter() {
             @Override
             public void componentShown(ComponentEvent e) {
@@ -209,19 +202,30 @@ public class OTAdmin extends JPanel {
         });
     }
 
-    private void styleButton(JButton btn) {
-        btn.setBackground(BRAND_COLOR);
+    // ---------------- HELPER METHODS (UI) ----------------
+    private void styleButton(JButton btn, Color bg) {
+        btn.setBackground(bg);
         btn.setForeground(Color.WHITE);
         btn.setFocusPainted(false);
         btn.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        btn.setBorder(BorderFactory.createEmptyBorder(8, 20, 8, 20));
-        btn.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
+        btn.setBorder(BorderFactory.createEmptyBorder(8, 15, 8, 15));
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
     }
 
-    /**
-     * Unified Fetch Method: Handles Search, Type Filter, and Status Filter.
-     * Loads hidden columns for bulk efficiency.
-     */
+    private void styleComboBox(JComboBox<String> cb) {
+        cb.setBackground(Color.WHITE);
+        cb.setFont(CELL_FONT);
+        cb.setPreferredSize(new Dimension(100, 35));
+    }
+
+    private void putPlaceholder(JTextField field, String text) {
+        field.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(Color.LIGHT_GRAY),
+            BorderFactory.createEmptyBorder(5, 5, 5, 5)
+        ));
+    }
+
+    // ---------------- LOGIC METHODS (UNCHANGED) ----------------
     void fetchRequests() {
         model.setRowCount(0);
 
@@ -241,8 +245,7 @@ public class OTAdmin extends JPanel {
         if (!"All".equals(statusFilter)) sql.append("AND r.status = ? ");
 
         sql.append("ORDER BY r.submitted_date DESC");
-
-        if (empNoSearch.isEmpty()) sql.append(" LIMIT 50"); // Limit for performance if no search
+        if (empNoSearch.isEmpty()) sql.append(" LIMIT 50");
 
         try (Connection conn = Database.connect();
              PreparedStatement ps = conn.prepareStatement(sql.toString())) {
@@ -255,17 +258,17 @@ public class OTAdmin extends JPanel {
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     model.addRow(new Object[]{
-                        false,                          // 0: Select
-                        rs.getInt("id"),                // 1: ID (Hidden)
-                        rs.getString("submitted_date"), // 2
-                        rs.getString("name"),           // 3
-                        rs.getString("empNo"),          // 4
-                        rs.getString("request_type"),   // 5
-                        rs.getString("status"),         // 6
-                        "View",                         // 7: Button
-                        rs.getString("details"),        // 8: Hidden
-                        rs.getString("start_date"),     // 9: Hidden
-                        rs.getString("end_date")        // 10: Hidden
+                        false,                          
+                        rs.getInt("id"),                
+                        rs.getString("submitted_date"), 
+                        rs.getString("name"),           
+                        rs.getString("empNo"),          
+                        rs.getString("request_type"),   
+                        rs.getString("status"),         
+                        "View",                         
+                        rs.getString("details"),        
+                        rs.getString("start_date"),     
+                        rs.getString("end_date")        
                     });
                 }
             }
@@ -275,10 +278,6 @@ public class OTAdmin extends JPanel {
         }
     }
 
-    /**
-     * Optimized Bulk Process: Reads directly from hidden table columns.
-     * No extra DB queries per row.
-     */
     private void bulkProcess(String action) {
         if (table.getRowCount() == 0) return;
 
@@ -303,13 +302,12 @@ public class OTAdmin extends JPanel {
         int successCount = 0;
         for (int row : rowsToProcess) {
             try {
-                // Fetch data from hidden model columns
                 int id = (int) model.getValueAt(row, 1);
                 String empNo = (String) model.getValueAt(row, 4);
                 String type = (String) model.getValueAt(row, 5);
-                String details = (String) model.getValueAt(row, 8); // Hidden
-                String start = (String) model.getValueAt(row, 9);   // Hidden
-                String end = (String) model.getValueAt(row, 10);    // Hidden
+                String details = (String) model.getValueAt(row, 8); 
+                String start = (String) model.getValueAt(row, 9);   
+                String end = (String) model.getValueAt(row, 10);    
 
                 Database.processRequestApproval(id, action, empNo, type, details, start, end);
                 successCount++;
@@ -341,7 +339,13 @@ public class OTAdmin extends JPanel {
     }
 
     class ButtonRenderer extends JButton implements TableCellRenderer {
-        public ButtonRenderer() { setOpaque(true); }
+        public ButtonRenderer() { 
+            setOpaque(true);
+            setFont(new Font("Segoe UI", Font.PLAIN, 11));
+            setBackground(new Color(230, 230, 230)); 
+            setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY));
+            setMargin(new Insets(2, 5, 2, 5));
+        }
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
             setText((value == null) ? "" : value.toString());
@@ -357,13 +361,13 @@ public class OTAdmin extends JPanel {
         public ButtonEditor(JCheckBox checkBox) {
             super(checkBox);
             button.setFocusPainted(false);
-            button.setBorderPainted(false);
             button.setOpaque(true);
+            button.setFont(new Font("Segoe UI", Font.PLAIN, 11));
             button.addActionListener((ActionEvent e) -> {
                 if (clicked) {
                     int row = table.getSelectedRow();
                     if (row != -1) {
-                        int id = (int) table.getValueAt(row, 1); // ID is index 1
+                        int id = (int) table.getValueAt(row, 1);
                         viewRequestDetails(id);
                     }
                 }
@@ -377,21 +381,6 @@ public class OTAdmin extends JPanel {
             label = (value == null) ? "" : value.toString();
             button.setText(label);
             clicked = true;
-            
-            String status = (String) table.getValueAt(row, 6); // Status is index 6
-            if ("Approved".equalsIgnoreCase(status)) {
-                button.setBackground(new Color(63, 255, 38, 178));
-                button.setForeground(Color.BLACK);
-            } else if ("Rejected".equalsIgnoreCase(status)) {
-                button.setBackground(new Color(255, 32, 32, 178));
-                button.setForeground(Color.WHITE);
-            } else if ("Pending".equalsIgnoreCase(status)) {
-                button.setBackground(new Color(255, 247, 5, 178));
-                button.setForeground(Color.BLACK);
-            } else {
-                button.setBackground(Color.WHITE);
-                button.setForeground(Color.BLACK);
-            }
             return button;
         }
 
@@ -409,6 +398,7 @@ public class OTAdmin extends JPanel {
             setSize(500, 450);
             setLocationRelativeTo(null);
             setLayout(null);
+            getContentPane().setBackground(Color.WHITE); // White Dialog
 
             try (ResultSet rs = Database.getRequestWithEmployeeDetailsById(id)) {
                 if (rs != null && rs.next()) {
@@ -439,17 +429,16 @@ public class OTAdmin extends JPanel {
                     int y = 20;
                     addLabel("Emp No: " + empNoVal, 140, y, Color.BLACK); y += 30;
                     addLabel("Name: " + name, 140, y, Color.BLACK); y += 30;
-                    addLabel("Type: " + requestType, 140, y, Color.RED); y += 30;
-                    addLabel("Details: " + details, 140, y, Color.RED); y += 30;
-                    addLabel("Reason: " + reason, 140, y, Color.RED); y += 30;
-                    addLabel("Start: " + startDate, 140, y, Color.RED); y += 30;
-                    if(endDate != null) { addLabel("End: " + endDate, 140, y, Color.RED); y += 30; }
-                    addLabel("Submitted: " + submittedDate, 140, y, Color.BLACK); y += 40;
+                    addLabel("Type: " + requestType, 140, y, new Color(22, 102, 87)); y += 30;
+                    addLabel("Details: " + details, 140, y, Color.DARK_GRAY); y += 30;
+                    addLabel("Reason: " + reason, 140, y, Color.DARK_GRAY); y += 30;
+                    addLabel("Start: " + startDate, 140, y, Color.BLACK); y += 30;
+                    if(endDate != null) { addLabel("End: " + endDate, 140, y, Color.BLACK); y += 30; }
+                    addLabel("Submitted: " + submittedDate, 140, y, Color.GRAY); y += 40;
 
                     JButton approve = new JButton("Approve");
-                    approve.setBounds(140, y, 100, 30);
-                    approve.setBackground(Color.GREEN);
-                    approve.setForeground(Color.WHITE);
+                    styleButton(approve, new Color(22, 102, 87));
+                    approve.setBounds(140, y, 100, 35);
                     approve.addActionListener(e -> {
                         Database.processRequestApproval(requestId, "Approved", empNoVal, requestType, details, startDate, endDate);
                         JOptionPane.showMessageDialog(this, "Approved!");
@@ -458,9 +447,8 @@ public class OTAdmin extends JPanel {
                     add(approve);
 
                     JButton reject = new JButton("Reject");
-                    reject.setBounds(260, y, 100, 30);
-                    reject.setBackground(Color.RED);
-                    reject.setForeground(Color.WHITE);
+                    styleButton(reject, new Color(220, 53, 69));
+                    reject.setBounds(260, y, 100, 35);
                     reject.addActionListener(e -> {
                         Database.processRequestApproval(requestId, "Rejected", empNoVal, requestType, details, startDate, endDate);
                         JOptionPane.showMessageDialog(this, "Rejected!");
@@ -478,7 +466,7 @@ public class OTAdmin extends JPanel {
         private void addLabel(String text, int x, int y, Color color) {
             JLabel lbl = new JLabel(text);
             lbl.setBounds(x, y, 320, 25);
-            lbl.setFont(new Font("Arial", Font.PLAIN, 14));
+            lbl.setFont(new Font("Segoe UI", Font.PLAIN, 14));
             lbl.setForeground(color);
             add(lbl);
         }

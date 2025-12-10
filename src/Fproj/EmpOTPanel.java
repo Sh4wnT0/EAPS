@@ -8,8 +8,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-import javax.swing.table.DefaultTableModel;
-import javax.swing.table.TableCellRenderer;
+import javax.swing.table.*;
 
 public class EmpOTPanel extends JPanel {
 
@@ -20,79 +19,62 @@ public class EmpOTPanel extends JPanel {
     private JTable table;
     private DefaultTableModel model;
     
+    // UI Constants
+    private final Color BRAND_COLOR = new Color(22, 102, 87);
+    private final Font HEADER_FONT = new Font("Segoe UI", Font.BOLD, 14);
+    private final Font CELL_FONT = new Font("Segoe UI", Font.PLAIN, 13);
+
     public EmpOTPanel(String empNo) {
         this.empNo = empNo;
         fetchEmployeeDetails();
 
         setLayout(new BorderLayout(20, 20));
-        setBackground(Color.WHITE);
-        setBorder(new EmptyBorder(20, 20, 20, 20));
+        setBackground(new Color(245, 245, 245));
+        setBorder(new EmptyBorder(25, 25, 25, 25));
 
         // --- TOP: Title ---
         JPanel topPanel = new JPanel(new BorderLayout());
-        topPanel.setBackground(Color.WHITE);
+        topPanel.setOpaque(false);
         
         JLabel lblTitle = new JLabel("Overtime & Holiday Requests");
-        lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 24));
+        lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 26));
+        lblTitle.setForeground(new Color(50, 50, 50));
         topPanel.add(lblTitle, BorderLayout.WEST);
         
         add(topPanel, BorderLayout.NORTH);
 
         // --- CENTER: History Table ---
-        // Table Model
         model = new DefaultTableModel(new String[]{"ID", "Type", "Details", "Start", "End", "Reason", "Status"}, 0) {
             @Override
             public boolean isCellEditable(int row, int column) { return false; }
         };
         
-        // Table Styling
-        table = new JTable(model) {
-            @Override
-            public Component prepareRenderer(TableCellRenderer renderer, int row, int column) {
-                Component c = super.prepareRenderer(renderer, row, column);
-                String status = (String) getValueAt(row, 6);
-                if (!isRowSelected(row)) {
-                    if ("Approved".equalsIgnoreCase(status)) {
-                        c.setBackground(new Color(200, 255, 200)); // Soft Green
-                        c.setForeground(Color.BLACK);
-                    } else if ("Rejected".equalsIgnoreCase(status)) {
-                        c.setBackground(new Color(255, 200, 200)); // Soft Red
-                        c.setForeground(Color.BLACK);
-                    } else if ("Pending".equalsIgnoreCase(status)) {
-                        c.setBackground(Color.YELLOW); // Soft Yellow
-                        c.setForeground(Color.BLACK);
-                    } else {
-                        c.setBackground(Color.WHITE);
-                        c.setForeground(Color.BLACK);
-                    }
-                }
-                return c;
-            }
-        };
-        
-        table.setRowHeight(30);
-        table.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 12));
-        table.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        table = new JTable(model);
+        styleTable(table);
+
+        // Hide ID column
+        table.getColumnModel().getColumn(0).setMinWidth(0);
+        table.getColumnModel().getColumn(0).setMaxWidth(0);
+        table.getColumnModel().getColumn(0).setWidth(0);
 
         JScrollPane scroll = new JScrollPane(table);
         scroll.getViewport().setBackground(Color.WHITE);
+        scroll.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY));
         add(scroll, BorderLayout.CENTER);
 
         // --- BOTTOM: Buttons ---
         JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        bottomPanel.setBackground(Color.WHITE);
+        bottomPanel.setOpaque(false);
 
         JButton btnRefresh = new JButton("Refresh");
-        btnRefresh.setPreferredSize(new Dimension(100, 35));
+        styleButton(btnRefresh, new Color(70, 130, 180)); // Steel Blue
+        btnRefresh.setPreferredSize(new Dimension(120, 40));
         btnRefresh.addActionListener(e -> loadRequests());
         bottomPanel.add(btnRefresh);
 
-        JButton btnRequest = new JButton("New Request");
-        btnRequest.setBackground(new Color(34, 139, 34));
-        btnRequest.setForeground(Color.WHITE);
-        btnRequest.setPreferredSize(new Dimension(150, 35));
-        btnRequest.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        btnRequest.setFocusPainted(false);
+        JButton btnRequest = new JButton("+ New Request");
+        styleButton(btnRequest, BRAND_COLOR);
+        btnRequest.setPreferredSize(new Dimension(160, 40));
         btnRequest.addActionListener(e -> openOTRequestDialog());
         bottomPanel.add(btnRequest);
 
@@ -100,6 +82,55 @@ public class EmpOTPanel extends JPanel {
 
         // Initial Load
         loadRequests();
+    }
+
+    // --- UI Helpers ---
+    private void styleTable(JTable t) {
+        t.setRowHeight(40);
+        t.setFont(CELL_FONT);
+        t.setShowGrid(true);
+        t.setGridColor(Color.GRAY);
+        t.setSelectionBackground(new Color(230, 240, 255));
+        t.setSelectionForeground(Color.BLACK);
+
+        JTableHeader header = t.getTableHeader();
+        header.setFont(HEADER_FONT);
+        header.setBackground(BRAND_COLOR);
+        header.setForeground(Color.WHITE);
+        header.setPreferredSize(new Dimension(0, 45));
+        header.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, Color.BLACK));
+        
+        // Custom Renderer for Row Colors and Alignment
+        t.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                setHorizontalAlignment(JLabel.CENTER); // Center align text
+                
+                String status = (String) table.getValueAt(row, 6); // Status Column
+                if (!isSelected) {
+                    if ("Approved".equalsIgnoreCase(status)) {
+                        c.setBackground(new Color(220, 255, 220)); 
+                    } else if ("Rejected".equalsIgnoreCase(status)) {
+                        c.setBackground(new Color(255, 220, 220));
+                    } else if ("Pending".equalsIgnoreCase(status)) {
+                        c.setBackground(new Color(255, 250, 200));
+                    } else {
+                        c.setBackground(Color.WHITE);
+                    }
+                }
+                return c;
+            }
+        });
+    }
+    
+    private void styleButton(JButton btn, Color bg) {
+        btn.setBackground(bg);
+        btn.setForeground(Color.WHITE);
+        btn.setFocusPainted(false);
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        btn.setBorder(BorderFactory.createEmptyBorder(5, 15, 5, 15));
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
     }
 
     private void fetchEmployeeDetails() {
@@ -144,7 +175,7 @@ public class EmpOTPanel extends JPanel {
     // --- DIALOG FOR REQUEST FORM ---
     private void openOTRequestDialog() {
         JDialog dialog = new JDialog((Frame) null, "Submit Request", true);
-        dialog.setSize(450, 550);
+        dialog.setSize(450, 580);
         dialog.setLocationRelativeTo(this);
         
         JPanel p = new JPanel(new GridBagLayout());
@@ -152,34 +183,35 @@ public class EmpOTPanel extends JPanel {
         p.setBorder(new EmptyBorder(20, 20, 20, 20));
         
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(5, 5, 5, 5);
+        gbc.insets = new Insets(8, 5, 8, 5);
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.anchor = GridBagConstraints.WEST;
         
         // --- 1. Header Info ---
         gbc.gridx = 0; gbc.gridy = 0; gbc.gridwidth = 2;
-        JLabel lblHeader = new JLabel("Employee Details");
-        lblHeader.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        JLabel lblHeader = new JLabel("Request Form");
+        lblHeader.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        lblHeader.setForeground(BRAND_COLOR);
         p.add(lblHeader, gbc);
         
+        gbc.gridy++;
+        p.add(new JSeparator(), gbc);
+
         gbc.gridy++; gbc.gridwidth = 1;
         p.add(new JLabel("Name: " + empName), gbc);
         
         gbc.gridx = 1;
         p.add(new JLabel("Position: " + empPosition), gbc);
         
-        gbc.gridx = 0; gbc.gridy++; gbc.gridwidth = 2;
-        p.add(new JSeparator(), gbc);
-
         // --- 2. Form Fields ---
-        // Declare components final/effectively final for listeners
         
         // Request Type
-        gbc.gridy++; gbc.gridwidth = 1;
+        gbc.gridx = 0; gbc.gridy++;
         p.add(new JLabel("Request Type:"), gbc);
         
         gbc.gridx = 1;
         JComboBox<String> cbRequestType = new JComboBox<>(new String[]{"Select", "OT", "Holiday"});
+        cbRequestType.setBackground(Color.WHITE);
         p.add(cbRequestType, gbc);
 
         // Hours (OT Only)
@@ -192,12 +224,13 @@ public class EmpOTPanel extends JPanel {
         p.add(txtHours, gbc);
 
         // Holiday Type (Holiday Only)
-        gbc.gridx = 0; gbc.gridy++; // Same row as hours visually, but handled by visibility
+        gbc.gridx = 0; gbc.gridy++; 
         JLabel lblHolidayType = new JLabel("Holiday Type:");
         p.add(lblHolidayType, gbc);
 
         gbc.gridx = 1;
         JComboBox<String> cbHolidayType = new JComboBox<>(new String[]{"Special", "Regular"});
+        cbHolidayType.setBackground(Color.WHITE);
         p.add(cbHolidayType, gbc);
 
         // Start Date
@@ -227,7 +260,7 @@ public class EmpOTPanel extends JPanel {
         JTextArea txtReason = new JTextArea(3, 20);
         txtReason.setLineWrap(true);
         txtReason.setWrapStyleWord(true);
-        txtReason.setBorder(BorderFactory.createLineBorder(Color.GRAY));
+        txtReason.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY));
         p.add(txtReason, gbc);
 
         // --- 3. Logic to Toggle Visibility ---
@@ -253,14 +286,9 @@ public class EmpOTPanel extends JPanel {
             dialog.repaint();
         };
 
-        // Initialize state
         toggleAction.run();
-        
-        // Add Listener
         cbRequestType.addItemListener(e -> {
-            if (e.getStateChange() == ItemEvent.SELECTED) {
-                toggleAction.run();
-            }
+            if (e.getStateChange() == ItemEvent.SELECTED) toggleAction.run();
         });
 
         // --- 4. Submit Button ---
@@ -269,10 +297,8 @@ public class EmpOTPanel extends JPanel {
         gbc.insets = new Insets(20, 5, 5, 5);
         
         JButton btnSubmit = new JButton("Submit Request");
-        btnSubmit.setPreferredSize(new Dimension(200, 35));
-        btnSubmit.setBackground(new Color(34, 139, 34));
-        btnSubmit.setForeground(Color.WHITE);
-        btnSubmit.setFocusPainted(false);
+        styleButton(btnSubmit, new Color(34, 139, 34));
+        btnSubmit.setPreferredSize(new Dimension(200, 40));
         
         btnSubmit.addActionListener(e -> {
             String type = (String) cbRequestType.getSelectedItem();
@@ -281,13 +307,11 @@ public class EmpOTPanel extends JPanel {
             String startDate = startDateObj == null ? "" :
                 new SimpleDateFormat("yyyy-MM-dd").format(startDateObj);
 
-
             if ("OT".equals(type)) {
                 String hours = txtHours.getText().trim();
                 Date endDateObj = dcEndDate.getDate();
                 String endDate = endDateObj == null ? "" :
                     new SimpleDateFormat("yyyy-MM-dd").format(endDateObj);
-
                 
                 if (hours.isEmpty() || reason.isEmpty() || startDate.isEmpty() || endDate.isEmpty()) {
                     JOptionPane.showMessageDialog(dialog, "Please fill all fields!");
@@ -299,14 +323,11 @@ public class EmpOTPanel extends JPanel {
                 
             } else if ("Holiday".equals(type)) {
                 String holidayType = (String) cbHolidayType.getSelectedItem();
-                
                 if (reason.isEmpty() || startDate.isEmpty()) {
                     JOptionPane.showMessageDialog(dialog, "Please fill all fields!");
                     return;
                 }
-                
                 Database.insertHolidayRequest(empNo, holidayType, reason, startDate);
-                
             } else {
                 JOptionPane.showMessageDialog(dialog, "Please select a request type.");
                 return;
@@ -314,11 +335,10 @@ public class EmpOTPanel extends JPanel {
 
             JOptionPane.showMessageDialog(dialog, "Request submitted successfully!");
             dialog.dispose();
-            loadRequests(); // Refresh main table
+            loadRequests();
         });
         
         p.add(btnSubmit, gbc);
-        
         dialog.add(p);
         dialog.setVisible(true);
     }
