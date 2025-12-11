@@ -1,270 +1,202 @@
-package Fproj; //Update 4
+package Fproj;
 
-import java.awt.BorderLayout;
-import java.awt.CardLayout;
-import java.awt.Color;
-import java.awt.Cursor;
-import java.awt.Dimension;
-import java.awt.FlowLayout;
-import java.awt.Font;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.awt.Image;
-import java.awt.Insets;
+import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-
-import javax.swing.BorderFactory;
-import javax.swing.ImageIcon;
-import javax.swing.JButton;
-import javax.swing.JLabel;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.SwingConstants;
-import javax.swing.SwingUtilities;
+import java.util.function.Consumer; // Import needed for the callback
+import javax.swing.*;
+import javax.swing.border.EmptyBorder;
 
 public class Admin extends JPanel {
 
-    // Layout components
     private CardLayout innerCardLayout;
     private JPanel innerCardPanel;
     private String currentAdminUsername;
-
-    // Sidebar buttons
-    private JButton btnHome, btnProfile, btnLeaveReq, btnOTReq, btnRecords, btnAttendance, btnPayroll, btnSettings;
     private JButton currentSelectedButton = null;
 
-    // Panel References
-    private AdminHomePanel homePanel;
-    private adProfile profilePanel;
-    private LeaveApproval leavePanel;
-    private OTAdmin otPanel;
-    private AdminRecords recordsPanel;
-    private adminAttendance attendancePanel;
-    private adminPayroll payrollPanel;
-    private AdminSettings settingPanel;
-    // Colors
-    private final Color BRAND_COLOR = new Color(22, 102, 87);
-    private final Color SIDEBAR_BG = new Color(240, 244, 248);
-    private final Color HOVER_COLOR = new Color(220, 230, 240);
-    private final Color ACTIVE_COLOR = new Color(200, 220, 255);
+    // --- Buttons ---
+    private JButton btnHome, btnProfile, btnRecords, btnAttendance, btnLeave, btnOT, btnPayroll, btnSettings;
 
-    public Admin(String adminUsername) {
-        this.currentAdminUsername = adminUsername;
+    // --- Colors ---
+    private final Color HEADER_COLOR = new Color(22, 102, 87);
+    private final Color SIDEBAR_BG = new Color(230, 235, 245);
+    private final Color BTN_HOVER = new Color(200, 220, 255);
+    private final Color LOGOUT_BTN = new Color(220, 20, 60);
+
+    public Admin(String username) {
+        this.currentAdminUsername = username;
         setLayout(new BorderLayout());
 
-        // --- 1. HEADER SECTION ---
-        JPanel header = createHeader();
-        add(header, BorderLayout.NORTH);
-
-        // --- 2. SIDEBAR SECTION ---
-        JPanel sidebar = createSidebar();
-        add(sidebar, BorderLayout.WEST);
-
-        // --- 3. CONTENT AREA (CardLayout) ---
-        innerCardLayout = new CardLayout();
-        innerCardPanel = new JPanel(innerCardLayout);
-        innerCardPanel.setBackground(Color.WHITE);
-
-        // Initialize Panels
-        homePanel = new AdminHomePanel();
-        profilePanel = new adProfile(this.currentAdminUsername);
-        leavePanel = new LeaveApproval();
-        otPanel = new OTAdmin();
-        recordsPanel = new AdminRecords();
-        attendancePanel = new adminAttendance();
-        payrollPanel = new adminPayroll();
-        settingPanel = new AdminSettings();
-
-        // Add Panels to CardLayout
-        innerCardPanel.add(homePanel, "home");
-        innerCardPanel.add(profilePanel, "profile");
-        innerCardPanel.add(leavePanel, "leave");
-        innerCardPanel.add(otPanel, "ot");
-        innerCardPanel.add(recordsPanel, "records");
-        innerCardPanel.add(attendancePanel, "attendance");
-        innerCardPanel.add(payrollPanel, "payroll");
-        innerCardPanel.add(settingPanel, "settings");
-
-        add(innerCardPanel, BorderLayout.CENTER);
-
-        // Select Home by default
-        setupButtonActions();
-        innerCardLayout.show(innerCardPanel, "home");
-        selectButton(btnHome);
-    }
-
-    private JPanel createHeader() {
+        // =================================================================================
+        // 1. HEADER SECTION
+        // =================================================================================
         JPanel header = new JPanel(new BorderLayout());
-        header.setBackground(BRAND_COLOR);
-        header.setPreferredSize(new Dimension(800, 65)); // Slightly taller
-        header.setBorder(BorderFactory.createEmptyBorder(0, 15, 0, 15));
+        header.setBackground(HEADER_COLOR);
+        header.setPreferredSize(new Dimension(0, 60));
+        header.setBorder(new EmptyBorder(10, 20, 10, 20));
 
-        // LEFT: Logo and Title
-        JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 12));
-        leftPanel.setOpaque(false);
-
-        ImageIcon logoIcon = null;
+        // Left: Logo + Title
+        JPanel branding = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 0));
+        branding.setOpaque(false);
+        
+        JLabel logo = new JLabel(); 
         try {
-            ImageIcon original = new ImageIcon(getClass().getResource("logo.png"));
-            Image img = original.getImage().getScaledInstance(45, 45, Image.SCALE_SMOOTH);
-            logoIcon = new ImageIcon(img);
-        } catch (Exception e) { }
+            ImageIcon icon = new ImageIcon(getClass().getResource("/Fproj/logo.png"));
+            Image img = icon.getImage().getScaledInstance(40, 40, Image.SCALE_SMOOTH);
+            logo.setIcon(new ImageIcon(img));
+        } catch (Exception e) { /* Ignore */ }
 
-        JLabel lblLogo = new JLabel();
-        if (logoIcon != null) lblLogo.setIcon(logoIcon);
+        JLabel title = new JLabel("Management Dashboard");
+        title.setFont(new Font("Segoe UI", Font.BOLD, 22));
+        title.setForeground(Color.WHITE);
         
-        JLabel lblTitle = new JLabel("Admin Dashboard");
-        lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 22));
-        lblTitle.setForeground(Color.WHITE);
+        branding.add(logo);
+        branding.add(title);
 
-        leftPanel.add(lblLogo);
-        leftPanel.add(lblTitle);
+        // Right: Notifications + Logout
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        actions.setOpaque(false);
 
-        // RIGHT: Buttons
-        JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 15));
-        rightPanel.setOpaque(false);
-
-        // --- BUTTON 1: NOTIFICATIONS (White Style) ---
         JButton btnNotifs = new JButton("Notifications");
-        btnNotifs.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        btnNotifs.setForeground(BRAND_COLOR); // Green text
-        btnNotifs.setBackground(Color.WHITE); // Solid White bg
-        btnNotifs.setFocusPainted(false);
-        btnNotifs.setBorder(BorderFactory.createEmptyBorder(8, 15, 8, 15));
-        btnNotifs.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        styleHeaderButton(btnNotifs, LOGOUT_BTN); 
         
-        // Hover Effect
-        btnNotifs.addMouseListener(new MouseAdapter() {
-            public void mouseEntered(MouseEvent e) { btnNotifs.setBackground(new Color(230, 230, 230)); }
-            public void mouseExited(MouseEvent e) { btnNotifs.setBackground(Color.WHITE); }
-        });
+        // --- STEP 3 APPLIED: Navigation Logic Callback ---
+        // This defines how the NotificationDialog switches tabs
+        Consumer<String> navLogic = (cardName) -> {
+            // 1. Switch the main view
+            innerCardLayout.show(innerCardPanel, cardName);
+            
+            // 2. Highlight the correct sidebar button
+            if (cardName.equals("leave")) selectButton(btnLeave);
+            else if (cardName.equals("ot")) selectButton(btnOT);
+            else if (cardName.equals("attendance")) selectButton(btnAttendance);
+            else if (cardName.equals("payroll")) selectButton(btnPayroll);
+            else if (cardName.equals("records")) selectButton(btnRecords);
+        };
 
         btnNotifs.addActionListener(e -> {
-            java.awt.Window win = SwingUtilities.getWindowAncestor(this);
-            if (win instanceof java.awt.Frame) {
-                new NotificationDialog((java.awt.Frame) win, currentAdminUsername, true).setVisible(true);
+            Window win = SwingUtilities.getWindowAncestor(this);
+            if (win instanceof Frame) {
+                // Pass navLogic to the dialog
+                new NotificationDialog((Frame) win, currentAdminUsername, true, navLogic).setVisible(true);
             }
         });
 
-        // --- BUTTON 2: LOGOUT (Red Style) ---
-        JButton btnLogout = new JButton("Logout");
-        btnLogout.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        btnLogout.setForeground(Color.WHITE);
-        btnLogout.setBackground(new Color(220, 53, 69)); // Solid Red
-        btnLogout.setFocusPainted(false);
-        btnLogout.setBorder(BorderFactory.createEmptyBorder(8, 15, 8, 15));
-        btnLogout.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        JButton btnLogout = new JButton("Log-out");
+        styleHeaderButton(btnLogout, LOGOUT_BTN);
+        btnLogout.addActionListener(e -> Main.cardLayout.show(Main.cardPanel, "main"));
 
-        // Hover Effect
-        btnLogout.addMouseListener(new MouseAdapter() {
-            public void mouseEntered(MouseEvent e) { btnLogout.setBackground(new Color(200, 40, 50)); }
-            public void mouseExited(MouseEvent e) { btnLogout.setBackground(new Color(220, 53, 69)); }
-        });
+        actions.add(btnNotifs);
+        actions.add(btnLogout);
 
-        btnLogout.addActionListener(e -> {
-            int confirm = JOptionPane.showConfirmDialog(this, "Are you sure you want to logout?", "Logout", JOptionPane.YES_NO_OPTION);
-            if(confirm == JOptionPane.YES_OPTION){
-                Main.cardLayout.show(Main.cardPanel, "main");
-            }
-        });
+        header.add(branding, BorderLayout.WEST);
+        header.add(actions, BorderLayout.EAST);
+        add(header, BorderLayout.NORTH);
 
-        rightPanel.add(btnNotifs);
-        rightPanel.add(btnLogout);
-
-        header.add(leftPanel, BorderLayout.WEST);
-        header.add(rightPanel, BorderLayout.EAST);
-
-        return header;
-    }
-
-    private JPanel createSidebar() {
-        JPanel sidebar = new JPanel(new GridBagLayout());
+        // =================================================================================
+        // 2. SIDEBAR SECTION
+        // =================================================================================
+        JPanel sidebar = new JPanel(new BorderLayout());
         sidebar.setBackground(SIDEBAR_BG);
         sidebar.setPreferredSize(new Dimension(220, 0));
         sidebar.setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, Color.LIGHT_GRAY));
 
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.gridx = 0;
-        gbc.gridy = 0;
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.weightx = 1.0;
-        gbc.insets = new Insets(5, 10, 5, 10);
+        JPanel menuContainer = new JPanel(new GridLayout(0, 1, 0, 5));
+        menuContainer.setOpaque(false);
+        menuContainer.setBorder(new EmptyBorder(15, 10, 15, 10));
 
-        // Create Buttons
-        btnHome = createMenuButton("Home", "Home.png");
-        btnProfile = createMenuButton("My Profile", "leave.png");
-        btnLeaveReq = createMenuButton("Leave Requests", "otholiday.png");
-        btnOTReq = createMenuButton("OT / Holiday", "otholiday.png");
-        btnRecords = createMenuButton("Employees", "profile.png");
-        btnAttendance = createMenuButton("Attendance", "attendance.png");
-        btnPayroll = createMenuButton("Payroll", "payroll.png");
-        btnSettings = createMenuButton("Company", "settings.png");
-        
+        // Initialize Buttons
+        btnHome = createMenuButton("Dashboard", "Home.png");
+        btnProfile = createMenuButton("My Profile", "leave.png"); 
+        btnRecords = createMenuButton("Employee Records", "payroll.png");
+        btnAttendance = createMenuButton("Attendance Logs", "attendance.png");
+        btnLeave = createMenuButton("Leave Requests", "otholiday.png");
+        btnOT = createMenuButton("OT / Holiday", "otholiday.png");
+        btnPayroll = createMenuButton("Payroll Processing", "payroll.png");
+        btnSettings = createMenuButton("Company Settings", "settings.png");
 
-        // Add to Sidebar
-        sidebar.add(btnHome, gbc); gbc.gridy++;
-        sidebar.add(btnProfile, gbc); gbc.gridy++;
-        
-        // Separator
-        gbc.insets = new Insets(15, 10, 5, 10);
-        JLabel lblManage = new JLabel("MANAGEMENT");
-        lblManage.setFont(new Font("Segoe UI", Font.BOLD, 10));
-        lblManage.setForeground(Color.GRAY);
-        sidebar.add(lblManage, gbc); gbc.gridy++;
-        gbc.insets = new Insets(5, 10, 5, 10);
+        menuContainer.add(btnHome);
+        menuContainer.add(btnProfile);
+        menuContainer.add(btnRecords);
+        menuContainer.add(btnAttendance);
+        menuContainer.add(btnLeave);
+        menuContainer.add(btnOT);
+        menuContainer.add(btnPayroll);
+        menuContainer.add(btnSettings);
 
-        sidebar.add(btnLeaveReq, gbc); gbc.gridy++;
-        sidebar.add(btnOTReq, gbc); gbc.gridy++;
-        sidebar.add(btnRecords, gbc); gbc.gridy++;
-        sidebar.add(btnAttendance, gbc); gbc.gridy++;
-        sidebar.add(btnPayroll, gbc); gbc.gridy++;
-        sidebar.add(btnSettings, gbc); gbc.gridy++;
+        sidebar.add(menuContainer, BorderLayout.NORTH);
+        add(sidebar, BorderLayout.WEST);
 
-        // Filler
-        GridBagConstraints gbcFiller = new GridBagConstraints();
-        gbcFiller.gridy = 100;
-        gbcFiller.weighty = 1.0;
-        sidebar.add(new JPanel(null) {{ setOpaque(false); }}, gbcFiller);
+        // =================================================================================
+        // 3. MAIN CONTENT AREA
+        // =================================================================================
+        innerCardLayout = new CardLayout();
+        innerCardPanel = new JPanel(innerCardLayout);
+        innerCardPanel.setBackground(Color.WHITE);
 
-        return sidebar;
+        // Load Sub-Panels (Important: The string keys here match the 'cardName' passed in navLogic)
+        innerCardPanel.add(new AdminHomePanel(), "home");
+        innerCardPanel.add(new adProfile(currentAdminUsername), "profile");
+        innerCardPanel.add(new AdminRecords(), "records");
+        innerCardPanel.add(new adminAttendance(), "attendance");
+        innerCardPanel.add(new LeaveApproval(), "leave");
+        innerCardPanel.add(new OTAdmin(), "ot");
+        innerCardPanel.add(new adminPayroll(), "payroll");
+        innerCardPanel.add(new AdminSettings(), "settings");
+
+        add(innerCardPanel, BorderLayout.CENTER);
+
+        // =================================================================================
+        // 4. ROLE-BASED ACCESS CONTROL
+        // =================================================================================
+        applyRolePermissions();
+
+        // =================================================================================
+        // 5. BUTTON LISTENERS
+        // =================================================================================
+        setupNavigation(btnHome, "home");
+        setupNavigation(btnProfile, "profile");
+        setupNavigation(btnRecords, "records");
+        setupNavigation(btnAttendance, "attendance");
+        setupNavigation(btnLeave, "leave");
+        setupNavigation(btnOT, "ot");
+        setupNavigation(btnPayroll, "payroll");
+        setupNavigation(btnSettings, "settings");
+
+        selectButton(btnHome);
+        innerCardLayout.show(innerCardPanel, "home");
     }
 
-    private void setupButtonActions() {
-        btnHome.addActionListener(e -> {
-            innerCardLayout.show(innerCardPanel, "home");
-            selectButton(btnHome);
-        });
-        btnProfile.addActionListener(e -> {
-            innerCardLayout.show(innerCardPanel, "profile");
-            selectButton(btnProfile);
-        });
-        btnLeaveReq.addActionListener(e -> {
-            innerCardLayout.show(innerCardPanel, "leave");
-            leavePanel.fetchLeaveRequests(); 
-            selectButton(btnLeaveReq);
-        });
-        btnOTReq.addActionListener(e -> {
-            innerCardLayout.show(innerCardPanel, "ot");
-            otPanel.fetchRequests(); 
-            selectButton(btnOTReq);
-        });
-        btnRecords.addActionListener(e -> {
-            innerCardLayout.show(innerCardPanel, "records");
-            selectButton(btnRecords);
-        });
-        btnAttendance.addActionListener(e -> {
-            innerCardLayout.show(innerCardPanel, "attendance");
-            attendancePanel.loadSummaryTable(); 
-            selectButton(btnAttendance);
-        });
-        btnPayroll.addActionListener(e -> {
-            innerCardLayout.show(innerCardPanel, "payroll");
-            selectButton(btnPayroll);
-        });
-        btnSettings.addActionListener(e -> {
-            innerCardLayout.show(innerCardPanel, "settings");
-            selectButton(btnSettings);
+    // -----------------------------------------------------------
+    //                  ROLE MANAGEMENT LOGIC
+    // -----------------------------------------------------------
+    private void applyRolePermissions() {
+        String position = Database.getASPosition(currentAdminUsername);
+        String role = (position != null) ? position.toLowerCase() : "admin";
+
+        // 1. HR OFFICER
+        if (role.contains("hr") || role.contains("human resource")) {
+            btnPayroll.setVisible(false);
+            btnOT.setVisible(false); 
+            btnSettings.setVisible(false);
+        } 
+        // 2. ACCOUNTANT / PAYROLL
+        else if (role.contains("accountant") || role.contains("payroll")) {
+            btnRecords.setVisible(false);
+            btnLeave.setVisible(false);
+            btnAttendance.setVisible(false);
+            btnSettings.setVisible(false);
+        }
+    }
+
+    // -----------------------------------------------------------
+    //                  UI HELPERS
+    // -----------------------------------------------------------
+    
+    private void setupNavigation(JButton btn, String cardName) {
+        btn.addActionListener(e -> {
+            selectButton(btn);
+            innerCardLayout.show(innerCardPanel, cardName);
         });
     }
 
@@ -272,46 +204,46 @@ public class Admin extends JPanel {
         JButton btn = new JButton(text);
         btn.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         btn.setBackground(Color.WHITE);
-        btn.setForeground(new Color(60, 60, 60));
+        btn.setForeground(Color.DARK_GRAY);
         btn.setFocusPainted(false);
-        btn.setBorder(BorderFactory.createEmptyBorder(12, 20, 12, 10));
         btn.setHorizontalAlignment(SwingConstants.LEFT);
+        btn.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(230, 230, 230), 1),
+            new EmptyBorder(10, 20, 10, 10)
+        ));
         btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
-
-        ImageIcon icon = loadIcon(iconName, 20);
-        if (icon != null) {
-            btn.setIcon(icon);
-            btn.setIconTextGap(20);
-        }
+        btn.setPreferredSize(new Dimension(0, 45));
 
         btn.addMouseListener(new MouseAdapter() {
             public void mouseEntered(MouseEvent e) {
-                if (btn != currentSelectedButton) {
-                    btn.setBackground(new Color(235, 245, 240)); 
-                }
+                if (btn != currentSelectedButton) btn.setBackground(SIDEBAR_BG);
             }
             public void mouseExited(MouseEvent e) {
-                if (btn != currentSelectedButton) {
-                    btn.setBackground(Color.WHITE);
-                }
+                if (btn != currentSelectedButton) btn.setBackground(Color.WHITE);
             }
         });
+
+        try {
+            java.net.URL imgURL = getClass().getResource("/Fproj/" + iconName);
+            if (imgURL == null) imgURL = getClass().getResource("/" + iconName);
+            if (imgURL != null) {
+                ImageIcon icon = new ImageIcon(imgURL);
+                Image img = icon.getImage().getScaledInstance(20, 20, Image.SCALE_SMOOTH);
+                btn.setIcon(new ImageIcon(img));
+                btn.setIconTextGap(15);
+            }
+        } catch (Exception e) {}
+
         return btn;
     }
 
-    private ImageIcon loadIcon(String fileName, int size) {
-        try {
-            java.net.URL imgURL = getClass().getResource("/" + fileName);
-            if (imgURL != null) {
-                ImageIcon originalIcon = new ImageIcon(imgURL);
-                Image img = originalIcon.getImage();
-                Image scaledImg = img.getScaledInstance(size, size, Image.SCALE_SMOOTH);
-                return new ImageIcon(scaledImg);
-            }
-            return null;
-        } catch (Exception e) {
-            return null;
-        }
+    private void styleHeaderButton(JButton btn, Color bg) {
+        btn.setBackground(bg);
+        btn.setForeground(Color.WHITE);
+        btn.setFocusPainted(false);
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        btn.setBorder(new EmptyBorder(5, 15, 5, 15));
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
     }
 
     private void selectButton(JButton btn) {
@@ -321,8 +253,8 @@ public class Admin extends JPanel {
             currentSelectedButton.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         }
         currentSelectedButton = btn;
-        currentSelectedButton.setBackground(ACTIVE_COLOR);
-        currentSelectedButton.setForeground(BRAND_COLOR);
-        currentSelectedButton.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        btn.setBackground(BTN_HOVER);
+        btn.setForeground(new Color(22, 102, 87)); 
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 14));
     }
 }

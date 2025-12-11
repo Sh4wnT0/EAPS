@@ -88,18 +88,46 @@ public class Database {
         }
     }
 
-    public static void insertASRecord(String name, String role, String username, String hashedPassword) {
-        String sql = "INSERT INTO as_records (name, role, username, password) VALUES (?, ?, ?, ?)";
+    public static void insertASRecord(String name, String role, String username, String hashedPassword, String address, String email, String contact, String position) {
+        // Ensure your as_records table has these columns. 
+        // If not, run ALTER TABLE in SQL browser first.
+        String sql = "INSERT INTO as_records (name, role, username, password, address, email, contact, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
         try (Connection conn = connect();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, name);
             pstmt.setString(2, role);
             pstmt.setString(3, username);
-            pstmt.setString(4, hashedPassword);  // Ensure password is hashed (e.g., BCrypt)
+            pstmt.setString(4, hashedPassword);
+            pstmt.setString(5, address);
+            pstmt.setString(6, email);
+            pstmt.setString(7, contact);
+            pstmt.setString(8, position);
             pstmt.executeUpdate();
         } catch (SQLException e) {
             e.printStackTrace();
         }
+    }
+ // ---------------- GET STAFF POSITION ----------------
+    public static String getASPosition(String username) {
+        String sql = "SELECT position FROM as_records WHERE username = ?";
+        
+        try (Connection conn = connect();
+             PreparedStatement pst = conn.prepareStatement(sql)) {
+            
+            pst.setString(1, username);
+            ResultSet rs = pst.executeQuery();
+            
+            if (rs.next()) {
+                // Return the actual position (e.g., "HR Officer", "Accountant")
+                return rs.getString("position");
+            }
+            
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        
+        // Default fallback if no position found (Assumes full Admin)
+        return "Admin"; 
     }
     // ---------------- CREATE EMPLOYEES TABLE ----------------
     public static void createTable() {
@@ -1407,12 +1435,23 @@ public class Database {
     }
  // ---------------- GET ALL PENDING REQUESTS (FOR ADMIN NOTIFICATIONS) ----------------
     // Returns list of: [ReqID, EmpNo, Name, Type, Details, Date]
+ // ---------------- GET ALL PENDING REQUESTS (CONSOLIDATED) ----------------
+    // Returns: [ReqID, EmpNo, Name, Type, Date, TableName]
     public static java.util.List<String[]> getAdminPendingRequests() {
         java.util.List<String[]> list = new java.util.ArrayList<>();
         
-        // Fetch all requests (Password Reset, Payslip, OT, Leave) that are still Pending
-        String sql = "SELECT id, empNo, name, request_type, details, submitted_date " + 
-                     "FROM requests WHERE status = 'Pending' ORDER BY submitted_date DESC";
+        // 1. General Requests (OT, Holiday, Payslip, Password Reset)
+        String q1 = "SELECT id, empNo, name, request_type, submitted_date, 'requests' as source_table FROM requests WHERE status = 'Pending'";
+        
+        // 2. Leave Requests
+        String q2 = "SELECT id, empNo, name, 'Leave' as request_type, submitted_date, 'leave_requests' as source_table FROM leave_requests WHERE status = 'Pending'";
+        
+        // 3. ACR (Attendance Correction) - Needs JOIN for Name
+        String q3 = "SELECT r.id, r.empNo, e.name, 'ACR' as request_type, r.request_date as submitted_date, 'attendance_requests' as source_table " +
+                    "FROM attendance_requests r JOIN employees e ON r.empNo = e.empNo WHERE r.status = 'Pending'";
+
+        // Combine all using UNION ALL
+        String sql = q1 + " UNION ALL " + q2 + " UNION ALL " + q3 + " ORDER BY submitted_date DESC";
 
         try (Connection conn = connect();
              Statement stmt = conn.createStatement();
@@ -1420,12 +1459,12 @@ public class Database {
 
             while (rs.next()) {
                 list.add(new String[]{
-                    String.valueOf(rs.getInt("id")),      // Index 0
-                    rs.getString("empNo"),                // Index 1
-                    rs.getString("name"),                 // Index 2
-                    rs.getString("request_type"),         // Index 3
-                    rs.getString("details"),              // Index 4
-                    rs.getString("submitted_date")        // Index 5
+                    String.valueOf(rs.getInt("id")),      // 0
+                    rs.getString("empNo"),                // 1
+                    rs.getString("name"),                 // 2
+                    rs.getString("request_type"),         // 3 (Type)
+                    rs.getString("submitted_date"),       // 4
+                    rs.getString("source_table")          // 5 (Used for navigation logic)
                 });
             }
         } catch (SQLException e) {

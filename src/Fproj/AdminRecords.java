@@ -401,14 +401,17 @@ public class AdminRecords extends JPanel {
 
         private JTextField txtName, txtAddress, txtEmail, txtContact, txtSalaryRate;
         private JComboBox<String> cbRole, cbPosition, cbStatus;
-        private JLabel lblEmpNumber, lblPhotoDisplay;
+        private JLabel lblEmpNumber, lblPhotoDisplay, lblEmpNoLabel; // Added reference to label
         private JButton btnUploadPhoto, btnAddPos, btnRemovePos, btnSave;
         private String imagePath = "";
         private int empCounter = Database.getLastEmployeeNumber() + 1;
 
+        // Staff specific choices
+        private final String[] STAFF_POSITIONS = {"HR Officer", "Accountant"};
+
         public RegistrationDialog() {
-            super((Frame) null, "Register New Employee", true);
-            setSize(800, 600);
+            super((Frame) null, "Register New Account", true);
+            setSize(850, 650);
             setLocationRelativeTo(null);
 
             // Main Layout
@@ -449,22 +452,33 @@ public class AdminRecords extends JPanel {
 
             int row = 0;
             
+            // 1. Role Selection (First to trigger changes)
+            cbRole = new JComboBox<>(new String[]{"Employee", "Staff"});
+            cbRole.setBackground(Color.WHITE);
+            cbRole.addActionListener(e -> toggleRoleView());
+            addRow(formPanel, gbc, row++, "Role:", cbRole);
+
+            // 2. Emp No (Visible only for Employee)
+            lblEmpNoLabel = new JLabel("Employee No.:"); // Keep ref to toggle visibility
+            lblEmpNoLabel.setFont(new Font("Segoe UI", Font.BOLD, 12));
+            
             lblEmpNumber = new JLabel(generateEmpNo());
             lblEmpNumber.setFont(new Font("Segoe UI", Font.BOLD, 16));
             lblEmpNumber.setForeground(BRAND_COLOR);
-            addRow(formPanel, gbc, row++, "Employee No.:", lblEmpNumber);
+            
+            gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0;
+            formPanel.add(lblEmpNoLabel, gbc);
+            gbc.gridx = 1; gbc.weightx = 1;
+            formPanel.add(lblEmpNumber, gbc);
+            row++;
 
-            cbRole = new JComboBox<>(new String[]{"Employee", "Staff"});
-            cbRole.setBackground(Color.WHITE);
-            cbRole.addActionListener(e -> togglePositionRole());
-            addRow(formPanel, gbc, row++, "Role:", cbRole);
-
+            // 3. Common Fields
             txtName = new JTextField(); addRow(formPanel, gbc, row++, "Full Name:", txtName);
             txtAddress = new JTextField(); addRow(formPanel, gbc, row++, "Address:", txtAddress);
             txtEmail = new JTextField(); addRow(formPanel, gbc, row++, "Email:", txtEmail);
             txtContact = new JTextField(); addRow(formPanel, gbc, row++, "Contact No.:", txtContact);
 
-            // Position with +/- buttons
+            // 4. Position (Dynamic based on Role)
             gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0;
             formPanel.add(new JLabel("Position:"), gbc);
 
@@ -473,17 +487,16 @@ public class AdminRecords extends JPanel {
             posPanel.setBackground(Color.WHITE);
 
             cbPosition = new JComboBox<>();
-            cbPosition.setEditable(true);
+            cbPosition.setEditable(true); // Default for Employee
             cbPosition.setBackground(Color.WHITE);
-            loadPositions();
             posPanel.add(cbPosition, BorderLayout.CENTER);
 
+            // +/- Buttons (Only for Employee)
             JPanel miniBtnPan = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
             miniBtnPan.setBackground(Color.WHITE);
             btnAddPos = new JButton("+"); btnAddPos.setPreferredSize(new Dimension(40, 25));
             btnRemovePos = new JButton("-"); btnRemovePos.setPreferredSize(new Dimension(40, 25));
             
-            // Logic for mini buttons
             btnAddPos.addActionListener(e -> addPosition());
             btnRemovePos.addActionListener(e -> removePosition());
             
@@ -494,6 +507,7 @@ public class AdminRecords extends JPanel {
             formPanel.add(posPanel, gbc);
             row++;
 
+            // 5. Status & Pay (Only for Employee)
             cbStatus = new JComboBox<>(new String[]{"Regular", "Probationary", "Contractual"});
             cbStatus.setBackground(Color.WHITE);
             cbStatus.addActionListener(e -> updateSalaryRate());
@@ -515,32 +529,128 @@ public class AdminRecords extends JPanel {
             mainPanel.add(buttonPanel, BorderLayout.SOUTH);
 
             add(mainPanel);
-            togglePositionRole();
-            updateSalaryRate();
+            
+            // Initial View Setup
+            loadPositions(); // Load DB positions first
+            toggleRoleView(); // Then set view state
         }
 
-        // Helper to add rows cleanly
+        // --- View Logic ---
+        private void toggleRoleView() {
+            boolean isStaff = "Staff".equals(cbRole.getSelectedItem());
+
+            // 1. Hide/Show Emp No
+            lblEmpNoLabel.setVisible(!isStaff);
+            lblEmpNumber.setVisible(!isStaff);
+
+            // 2. Hide/Show Salary & Status
+            cbStatus.setEnabled(!isStaff);
+            txtSalaryRate.setEnabled(!isStaff);
+            if(isStaff) {
+                txtSalaryRate.setText("N/A");
+            } else {
+                updateSalaryRate();
+            }
+
+            // 3. Change Position Dropdown
+            cbPosition.removeAllItems();
+            if (isStaff) {
+                // Fixed choices for Staff
+                for (String pos : STAFF_POSITIONS) cbPosition.addItem(pos);
+                cbPosition.setEditable(false);
+                btnAddPos.setVisible(false);
+                btnRemovePos.setVisible(false);
+            } else {
+                // Dynamic from DB for Employee
+                loadPositions();
+                cbPosition.setEditable(true);
+                btnAddPos.setVisible(true);
+                btnRemovePos.setVisible(true);
+            }
+        }
+
+        // --- Registration Logic ---
+        private void register() {
+            String name = txtName.getText().trim();
+            String email = txtEmail.getText().trim();
+            String role = cbRole.getSelectedItem().toString();
+            String position = cbPosition.getSelectedItem().toString();
+
+            if (name.isEmpty() || email.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "Please fill required fields.");
+                return;
+            }
+
+            try {
+                String password = generateRandomPassword(10);
+                String username = "";
+
+                // A. STAFF REGISTRATION
+                if ("Staff".equalsIgnoreCase(role)) {
+                    // Generate Username Rule
+                    // Remove spaces from name for username safety
+                    String cleanName = name.replaceAll("\\s+", "").toLowerCase();
+                    
+                    if ("HR Officer".equals(position)) {
+                        username = "hr_" + cleanName;
+                    } else if ("Accountant".equals(position)) {
+                        username = "pay_" + cleanName;
+                    } else {
+                        username = "staff_" + cleanName;
+                    }
+
+                    // Save to as_records (name, role, username, password)
+                    // Note: You need to update Database.insertASRecord to accept address/contact too if you want them saved
+                    // For now, using the method signature we have:
+                    Database.insertASRecord(
+                            name, 
+                            role.toLowerCase(), 
+                            username, 
+                            password,
+                            txtAddress.getText(),
+                            email,
+                            txtContact.getText(),
+                            position // "HR Officer" or "Accountant"
+                        );
+                    
+                    // IF you updated insertASRecord to take address/email/contact/position, use that instead.
+                    // Assuming existing method: insertASRecord(name, role, username, password)
+                    // You might want to update Database.java to store the extra details for staff too.
+                    
+                } 
+                // B. EMPLOYEE REGISTRATION
+                else {
+                    username = lblEmpNumber.getText(); // EmpNo is username
+                    int salary = 0;
+                    try { salary = Integer.parseInt(txtSalaryRate.getText().trim()); } catch(Exception e){}
+
+                    Database.insertEmployeeFull(
+                            username, name, role.toLowerCase(), txtAddress.getText(), email,
+                            txtContact.getText(), position, 
+                            cbStatus.getSelectedItem().toString(), salary, password, imagePath
+                    );
+                }
+
+                sendEmail(email, name, username, password);
+                JOptionPane.showMessageDialog(this, "Registration Successful!\nUsername: " + username + "\nCredentials sent to email.");
+                dispose();
+                loadTable();
+                
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(this, "Error: " + e.getMessage());
+            }
+        }
+
+        // --- Helper Methods ---
         private void addRow(JPanel panel, GridBagConstraints gbc, int row, String label, JComponent comp) {
             gbc.gridx = 0; gbc.gridy = row; gbc.weightx = 0;
-            JLabel l = new JLabel(label);
-            l.setFont(new Font("Segoe UI", Font.BOLD, 12));
+            JLabel l = new JLabel(label); l.setFont(new Font("Segoe UI", Font.BOLD, 12));
             panel.add(l, gbc);
-
-            gbc.gridx = 1; gbc.weightx = 1;
-            comp.setPreferredSize(new Dimension(200, 30));
+            gbc.gridx = 1; gbc.weightx = 1; comp.setPreferredSize(new Dimension(200, 30));
             panel.add(comp, gbc);
         }
 
-        // --- Logic Methods (Preserved from original) ---
-
         private String generateEmpNo() { return String.format("%03d", empCounter); }
-
-        private void togglePositionRole() {
-            boolean isStaff = "Staff".equals(cbRole.getSelectedItem());
-            cbPosition.setEnabled(!isStaff);
-            btnAddPos.setEnabled(!isStaff);
-            btnRemovePos.setEnabled(!isStaff);
-        }
 
         private void loadPositions() {
             try (Connection conn = Database.connect();
@@ -556,10 +666,7 @@ public class AdminRecords extends JPanel {
             String newPos = cbPosition.getEditor().getItem().toString().trim();
             if (!newPos.isEmpty()) {
                 DefaultComboBoxModel<String> model = (DefaultComboBoxModel<String>) cbPosition.getModel();
-                if (((DefaultComboBoxModel<String>) cbPosition.getModel()).getIndexOf(newPos) == -1) {
-                    model.addElement(newPos);
-                    cbPosition.setSelectedItem(newPos);
-                }
+                if (model.getIndexOf(newPos) == -1) { model.addElement(newPos); cbPosition.setSelectedItem(newPos); }
             }
         }
 
@@ -571,7 +678,6 @@ public class AdminRecords extends JPanel {
         private void updateSalaryRate() {
             String status = (String) cbStatus.getSelectedItem();
             int salary = ("Probationary".equalsIgnoreCase(status) || "Contractual".equalsIgnoreCase(status)) ? 600 : 650;
-            if (salary == 650 && !"Regular".equals(status)) salary = 0; // Fallback logic
             txtSalaryRate.setText(String.valueOf(salary));
             txtSalaryRate.setEditable(!"Probationary".equalsIgnoreCase(status) && !"Contractual".equalsIgnoreCase(status));
         }
@@ -584,59 +690,15 @@ public class AdminRecords extends JPanel {
                     File selectedFile = fileChooser.getSelectedFile();
                     Path photoDir = Paths.get("employee_photos");
                     if (!Files.exists(photoDir)) Files.createDirectories(photoDir);
-
-                    String newFileName = "emp_" + lblEmpNumber.getText() + "_" + System.currentTimeMillis() + ".jpg";
+                    String newFileName = "emp_" + System.currentTimeMillis() + ".jpg"; // timestamp for uniqueness
                     Path dest = photoDir.resolve(newFileName);
                     Files.copy(selectedFile.toPath(), dest, StandardCopyOption.REPLACE_EXISTING);
-
                     imagePath = dest.toString();
                     ImageIcon icon = new ImageIcon(imagePath);
                     Image scaled = icon.getImage().getScaledInstance(150, 150, Image.SCALE_SMOOTH);
                     lblPhotoDisplay.setIcon(new ImageIcon(scaled));
                     lblPhotoDisplay.setText("");
-                } catch (IOException ex) {
-                    JOptionPane.showMessageDialog(this, "Error uploading photo.");
-                }
-            }
-        }
-
-        private boolean isUniqueName(String name) {
-            // Simplified logic call
-            return true; // Implies logic exists in your DB class or original code
-        }
-
-        private void register() {
-            String name = txtName.getText().trim();
-            String email = txtEmail.getText().trim();
-            String salaryStr = txtSalaryRate.getText().trim();
-
-            if (name.isEmpty() || email.isEmpty() || salaryStr.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "Please fill required fields.");
-                return;
-            }
-
-            try {
-                int salary = Integer.parseInt(salaryStr);
-                String password = generateRandomPassword(10);
-                String role = cbRole.getSelectedItem().toString();
-                String empNo = lblEmpNumber.getText();
-
-                if ("Staff".equalsIgnoreCase(role)) {
-                    Database.insertASRecord(name, role.toLowerCase(), empNo, password);
-                } else {
-                    Database.insertEmployeeFull(
-                            empNo, name, role.toLowerCase(), txtAddress.getText(), email,
-                            txtContact.getText(), cbPosition.getSelectedItem().toString(), 
-                            cbStatus.getSelectedItem().toString(), salary, password, imagePath
-                    );
-                }
-
-                sendEmail(email, name, empNo, password);
-                JOptionPane.showMessageDialog(this, "Registration Successful! Credentials sent.");
-                dispose();
-                loadTable();
-            } catch (Exception e) {
-                JOptionPane.showMessageDialog(this, "Error: " + e.getMessage());
+                } catch (IOException ex) { JOptionPane.showMessageDialog(this, "Error uploading photo."); }
             }
         }
 
@@ -649,27 +711,21 @@ public class AdminRecords extends JPanel {
         }
 
         private void sendEmail(String to, String name, String user, String pass) throws MessagingException {
-            // Email logic preserved
             final String from = "sh4wntolentino@gmail.com";
             final String pwd = "dkffdbkmlifnvows";
-
             Properties props = new Properties();
             props.put("mail.smtp.auth", "true");
             props.put("mail.smtp.starttls.enable", "true");
             props.put("mail.smtp.host", "smtp.gmail.com");
             props.put("mail.smtp.port", "587");
-
             Session session = Session.getInstance(props, new Authenticator() {
-                protected PasswordAuthentication getPasswordAuthentication() {
-                    return new PasswordAuthentication(from, pwd);
-                }
+                protected PasswordAuthentication getPasswordAuthentication() { return new PasswordAuthentication(from, pwd); }
             });
-
             Message msg = new MimeMessage(session);
             msg.setFrom(new InternetAddress(from));
             msg.setRecipients(Message.RecipientType.TO, InternetAddress.parse(to));
             msg.setSubject("Your Account Credentials");
-            msg.setText("Hello " + name + ",\n\nUsername: " + user + "\nPassword: " + pass);
+            msg.setText("Hello " + name + ",\n\nUsername: " + user + "\nPassword: " + pass + "\n\nPlease change your password upon login.");
             Transport.send(msg);
         }
     }

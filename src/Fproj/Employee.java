@@ -50,11 +50,14 @@ public class Employee extends JPanel {
         headerRight.setOpaque(false);
 
         JButton btnNotifications = createHeaderButton("Notifications");
+        
+        // --- UPDATED: Pass 4 arguments (owner, user, isAdmin, callback) ---
         btnNotifications.addActionListener(e -> {
             new NotificationDialog(
                 (Frame) SwingUtilities.getWindowAncestor(this), 
                 empNo, 
-                false // Not Admin
+                false, // Not Admin
+                null   // No Navigation Callback needed for employees
             ).setVisible(true);
         });
 
@@ -122,12 +125,13 @@ public class Employee extends JPanel {
         // --- UPDATED ATTENDANCE BUTTON ---
         btnAttendance.addActionListener(e -> {
             switchTab(btnAttendance, "attendance");
-            // Auto-refresh logic: Find the panel and call loadAttendance()
+            // Auto-refresh logic: Find the panel and call loadTable()
             for (Component comp : innerCardPanel.getComponents()) {
                 if (comp instanceof JScrollPane) {
                     Component view = ((JScrollPane) comp).getViewport().getView();
                     if (view instanceof EmpAttendancePanel) {
-                        ((EmpAttendancePanel) view).loadTable(); // Refresh Table
+                        // Ensure EmpAttendancePanel has a public loadTable() method
+                        ((EmpAttendancePanel) view).loadTable(); 
                     }
                 }
             }
@@ -190,9 +194,9 @@ public class Employee extends JPanel {
 
     private ImageIcon loadIcon(String fileName, int w, int h) {
         try {
-            java.net.URL imgURL = getClass().getResource("/" + fileName);
+            java.net.URL imgURL = getClass().getResource("/Fproj/" + fileName); // Added folder
             if (imgURL == null) {
-                imgURL = getClass().getResource(fileName);
+                imgURL = getClass().getResource("/" + fileName);
             }
             if (imgURL != null) {
                 Image img = new ImageIcon(imgURL).getImage();

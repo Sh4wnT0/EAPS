@@ -11,7 +11,7 @@ import javax.swing.*;
 
 public class Third extends JPanel {
 
-    // 1. Declare components at Class Level (so we can change their fonts later)
+    // 1. Declare components at Class Level for dynamic resizing
     private JLabel title, lblUser, lblPass, reqTitle, sub;
     private JTextField textField;
     private JPasswordField passwordField;
@@ -155,10 +155,9 @@ public class Third extends JPanel {
         if (h == 0) return; // Prevent errors on first load
 
         // Calculate scale ratio. 600 is our "base" design height.
-        // If window is 900px high, ratio is 1.5
         double ratio = Math.min((double)getWidth() / 800, (double)getHeight() / 600);
         
-        // Clamp the ratio (Don't let text get smaller than 80% or larger than 250%)
+        // Clamp the ratio
         ratio = Math.max(0.8, Math.min(ratio, 2.5));
 
         // Update Fonts using the Ratio
@@ -191,6 +190,9 @@ public class Third extends JPanel {
         btn.setPreferredSize(new Dimension(120, 40));
     }
 
+    // ==========================================
+    //           UPDATED LOGIN LOGIC
+    // ==========================================
     private void handleLogin() {
         String identifier = textField.getText().trim();
         String password = new String(passwordField.getPassword()).trim();
@@ -200,18 +202,19 @@ public class Third extends JPanel {
             return;
         }
 
+        // 1. CHECK ADMIN/STAFF TABLE (as_records)
         String role = checkASRecords(identifier, password);
+        
         if (role != null) {
-            if ("admin".equals(role)) {
-                Admin adminDash = new Admin(identifier);
-                Main.cardPanel.add(adminDash, "AdDashboard");
-                Main.cardLayout.show(Main.cardPanel, "AdDashboard");
-            } else if ("staff".equals(role)) {
-                Main.cardLayout.show(Main.cardPanel, "StaffDashboard");
-            }
-            return;
+            // BOTH Admin and Staff go to the Admin Dashboard.
+            // The Admin class constructor will hide buttons based on the user's role.
+            Admin adminDash = new Admin(identifier);
+            Main.cardPanel.add(adminDash, "AdDashboard");
+            Main.cardLayout.show(Main.cardPanel, "AdDashboard");
+            return; 
         }
 
+        // 2. CHECK EMPLOYEE TABLE (employees)
         if (Database.checkEmployeeLogin(identifier, password)) {
             Employee empDash = new Employee(identifier);
             Main.cardPanel.add(empDash, "EmpDashboard");

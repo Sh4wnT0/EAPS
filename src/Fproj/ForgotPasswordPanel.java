@@ -2,6 +2,10 @@ package Fproj;
 
 import javax.swing.*;
 import java.awt.*;
+import java.security.SecureRandom;
+import java.util.Properties;
+import jakarta.mail.*;
+import jakarta.mail.internet.*;
 
 public class ForgotPasswordPanel extends JPanel {
 
@@ -16,10 +20,10 @@ public class ForgotPasswordPanel extends JPanel {
         
         // --- 1. Top Bar (Back Button) ---
         gbc.gridx = 0;
-        gbc.gridy = 0; // Row 0
+        gbc.gridy = 0; 
         gbc.gridwidth = 2;
         gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.insets = new Insets(10, 10, 0, 0); // Padding for top-left
+        gbc.insets = new Insets(10, 10, 0, 0); 
 
         JPanel topBar = new JPanel(new FlowLayout(FlowLayout.LEFT));
         topBar.setOpaque(false);
@@ -32,15 +36,15 @@ public class ForgotPasswordPanel extends JPanel {
         btnBack.setFocusPainted(false);
         btnBack.setCursor(new Cursor(Cursor.HAND_CURSOR));
         
-        // Ensure "Login" matches the exact string key you used in Main.java
-        btnBack.addActionListener(e -> Main.cardLayout.show(Main.cardPanel, "Login"));
+        // Ensure "main" matches your CardLayout key for the login screen
+        btnBack.addActionListener(e -> Main.cardLayout.show(Main.cardPanel, "main"));
         
         topBar.add(btnBack);
-        add(topBar, gbc); // <--- THIS WAS MISSING
+        add(topBar, gbc); 
 
         // --- 2. Title ---
-        gbc.gridy = 1; // Shifted to Row 1
-        gbc.insets = new Insets(20, 30, 40, 30); // Adjusted top margin
+        gbc.gridy = 1; 
+        gbc.insets = new Insets(20, 30, 40, 30); 
         
         JLabel title = new JLabel("FORGOT PASSWORD");
         title.setFont(new Font("Serif", Font.BOLD, 30));
@@ -49,22 +53,19 @@ public class ForgotPasswordPanel extends JPanel {
         add(title, gbc);
 
         // --- 3. Fields ---
-        // Reset insets for inputs
         gbc.insets = new Insets(5, 0, 5, 0);
         gbc.gridwidth = 2;
 
-        // Username Field
-        gbc.gridy = 2; // Shifted to Row 2
-        usernameField = createUnderlineTextField("Username");
+        gbc.gridy = 2; 
+        usernameField = createUnderlineTextField("Username/ID");
         add(usernameField, gbc);
 
-        // Email Field
-        gbc.gridy = 3; // Shifted to Row 3
+        gbc.gridy = 3; 
         emailField = createUnderlineTextField("Email");
         add(emailField, gbc);
 
         // --- 4. Submit Button ---
-        gbc.gridy = 4; // Shifted to Row 4
+        gbc.gridy = 4; 
         gbc.insets = new Insets(30, 0, 30, 0);
         
         submit = new JButton("Submit");
@@ -79,7 +80,6 @@ public class ForgotPasswordPanel extends JPanel {
         submit.setOpaque(true);
         submit.setUI(new RoundedButtonUI());
         
-        // Action Listener
         submit.addActionListener(e -> handleSubmit());
         
         add(submit, gbc);
@@ -103,7 +103,6 @@ public class ForgotPasswordPanel extends JPanel {
                     tf.setForeground(Color.WHITE);
                 }
             }
-
             public void focusLost(java.awt.event.FocusEvent e) {
                 if (tf.getText().isEmpty()) {
                     tf.setText(placeholder);
@@ -114,11 +113,12 @@ public class ForgotPasswordPanel extends JPanel {
         return tf;
     }
 
+    // --- MAIN LOGIC ---
     private void handleSubmit() {
         String username = usernameField.getText().trim();
         String email = emailField.getText().trim();
 
-        if (username.isEmpty() || username.equalsIgnoreCase("Username")) {
+        if (username.isEmpty() || username.contains("Username")) {
             JOptionPane.showMessageDialog(this, "Please enter Username/ID");
             return;
         }
@@ -127,6 +127,7 @@ public class ForgotPasswordPanel extends JPanel {
             return;
         }
 
+        // Check which table the user belongs to
         String sourceTable = Database.checkUserTable(username, email);
 
         if (sourceTable == null) {
@@ -134,17 +135,83 @@ public class ForgotPasswordPanel extends JPanel {
         } else if (sourceTable.equals("error")) {
             JOptionPane.showMessageDialog(this, "Database connection failed.", "Error", JOptionPane.ERROR_MESSAGE);
         } else {
-            Database.createPasswordResetRequest(username, username, email); 
-            String msg = (sourceTable.equals("employees")) ? "Verified: Employee Account found." : "Verified: Admin/Record Account found.";
-            JOptionPane.showMessageDialog(this, msg + "\nPassword reset request has been sent to the admin.");
+            // BRANCHING LOGIC HERE
             
-            usernameField.setText("Username");
+            if (sourceTable.equals("employees")) {
+                // CASE A: EMPLOYEE -> Send Request to Admin
+                Database.createPasswordResetRequest(username, username, email); 
+                JOptionPane.showMessageDialog(this, "Verified: Employee Account found.\nA password reset request has been sent to the Admin.");
+            
+            } else if (sourceTable.equals("as_records")) {
+                // CASE B: ADMIN/STAFF -> Immediate Reset (No Approval Needed)
+                performImmediateReset(username, email);
+            }
+            
+            // Clear fields
+            usernameField.setText("Username/ID");
+            usernameField.setForeground(new Color(200, 200, 200));
             emailField.setText("Email");
+            emailField.setForeground(new Color(200, 200, 200));
+        }
+    }
+
+    // --- IMMEDIATE RESET LOGIC (For Admin/Staff) ---
+    private void performImmediateReset(String username, String email) {
+        String newPass = generateRandomPassword();
+        
+        // 1. Update Database Directly
+        Database.updateUserPassword(username, newPass);
+        
+        // 2. Send Email
+        sendEmail(email, username, username, newPass);
+        
+        JOptionPane.showMessageDialog(this, 
+            "Verified: Admin/Staff Account found.\n\n" +
+            "Your password has been successfully reset.\n" +
+            "Please check your email for the new credentials.");
+    }
+
+    // --- HELPER: Random Password ---
+    private String generateRandomPassword() {
+        String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        SecureRandom rnd = new SecureRandom();
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 8; i++) sb.append(chars.charAt(rnd.nextInt(chars.length())));
+        return sb.toString();
+    }
+
+    // --- HELPER: Send Email ---
+    private void sendEmail(String to, String name, String user, String pass) {
+        final String from = "sh4wntolentino@gmail.com"; 
+        final String pwd = "dkffdbkmlifnvows"; 
+
+        Properties props = new Properties();
+        props.put("mail.smtp.auth", "true");
+        props.put("mail.smtp.starttls.enable", "true");
+        props.put("mail.smtp.host", "smtp.gmail.com");
+        props.put("mail.smtp.port", "587");
+
+        Session session = Session.getInstance(props, new Authenticator() {
+            protected PasswordAuthentication getPasswordAuthentication() {
+                return new PasswordAuthentication(from, pwd);
+            }
+        });
+
+        try {
+            Message msg = new MimeMessage(session);
+            msg.setFrom(new InternetAddress(from));
+            msg.setRecipients(Message.RecipientType.TO, InternetAddress.parse(to));
+            msg.setSubject("Admin Password Reset");
+            msg.setText("Hello " + name + ",\n\nYour password has been reset successfully.\n\nUsername: " + user + "\nNew Password: " + pass + "\n\nPlease login and change it immediately.");
+            Transport.send(msg);
+        } catch (MessagingException e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Failed to send email. Check internet connection.");
         }
     }
 }
 
-// Rounded Button UI (Unchanged)
+// Rounded Button UI
 class RoundedButtonUI extends javax.swing.plaf.basic.BasicButtonUI {
     private static final int RADIUS = 20;
     @Override
