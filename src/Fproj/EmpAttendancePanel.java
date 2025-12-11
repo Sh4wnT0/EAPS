@@ -629,7 +629,7 @@ public class EmpAttendancePanel extends JPanel {
         // Default to Absent only if we are sure no logic above matched
         return "Absent";
     }
-    private void loadTable() {
+    void loadTable() {
         model.setRowCount(0);
         java.time.LocalDate now = java.time.LocalDate.now();
         java.time.LocalDate startOfMonth = now.withDayOfMonth(1);

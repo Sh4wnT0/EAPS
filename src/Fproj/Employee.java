@@ -50,7 +50,6 @@ public class Employee extends JPanel {
         headerRight.setOpaque(false);
 
         JButton btnNotifications = createHeaderButton("Notifications");
-        // FIXED: Uses the unified NotificationDialog (isAdmin = false)
         btnNotifications.addActionListener(e -> {
             new NotificationDialog(
                 (Frame) SwingUtilities.getWindowAncestor(this), 
@@ -104,7 +103,7 @@ public class Employee extends JPanel {
         innerCardLayout = new CardLayout();
         innerCardPanel = new JPanel(innerCardLayout);
 
-        // Panels inside ScrollPanes for better responsiveness
+        // Panels inside ScrollPanes
         innerCardPanel.add(new JScrollPane(new EmpHomePanel(empNo)), "home");
         innerCardPanel.add(new JScrollPane(new empProfile(empNo)), "profile");
         innerCardPanel.add(new JScrollPane(new EmpAttendancePanel(empNo)), "attendance");
@@ -115,11 +114,25 @@ public class Employee extends JPanel {
         add(innerCardPanel, BorderLayout.CENTER);
 
         // =================================================================================
-        // 4. BUTTON LOGIC
+        // 4. BUTTON LOGIC (UPDATED FOR REFRESH)
         // =================================================================================
         btnHome.addActionListener(e -> switchTab(btnHome, "home"));
         btnProfile.addActionListener(e -> switchTab(btnProfile, "profile"));
-        btnAttendance.addActionListener(e -> switchTab(btnAttendance, "attendance"));
+        
+        // --- UPDATED ATTENDANCE BUTTON ---
+        btnAttendance.addActionListener(e -> {
+            switchTab(btnAttendance, "attendance");
+            // Auto-refresh logic: Find the panel and call loadAttendance()
+            for (Component comp : innerCardPanel.getComponents()) {
+                if (comp instanceof JScrollPane) {
+                    Component view = ((JScrollPane) comp).getViewport().getView();
+                    if (view instanceof EmpAttendancePanel) {
+                        ((EmpAttendancePanel) view).loadTable(); // Refresh Table
+                    }
+                }
+            }
+        });
+
         btnLeave.addActionListener(e -> switchTab(btnLeave, "leave"));
         btnOT.addActionListener(e -> switchTab(btnOT, "ot"));
         btnPayroll.addActionListener(e -> switchTab(btnPayroll, "payroll"));
