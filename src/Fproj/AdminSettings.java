@@ -41,6 +41,7 @@ public class AdminSettings extends JPanel {
         
         loadProfileData();
         loadAnnouncements();
+     
     }
 
     // ==========================================

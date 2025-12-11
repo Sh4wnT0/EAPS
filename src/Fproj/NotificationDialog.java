@@ -1,11 +1,15 @@
 package Fproj;
 
 import java.awt.*;
+import java.security.SecureRandom;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Properties;
 import java.util.function.Consumer;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
+import jakarta.mail.*;
+import jakarta.mail.internet.*;
 
 public class NotificationDialog extends JDialog {
 
@@ -133,13 +137,12 @@ public class NotificationDialog extends JDialog {
         JButton btnAction = new JButton("Process");
         styleButton(btnAction, new Color(220, 53, 69), Color.WHITE);
         btnAction.setPreferredSize(new Dimension(80, 30));
+        
+        // Button Logic: Prompt email -> Reset -> Email -> Refresh
         btnAction.addActionListener(e -> {
-             // Basic prompt logic (expand as needed from previous discussions)
-             String email = JOptionPane.showInputDialog(this, "Enter user email to verify:");
+             String email = JOptionPane.showInputDialog(this, "Enter user email to send credentials:");
              if(email != null && !email.isEmpty()) {
-                 Database.performPasswordReset(data[0], data[1], "Temp1234"); // Simplified call
-                 JOptionPane.showMessageDialog(this, "Reset complete.");
-                 refreshContent();
+                 performPassReset(data[0], data[1], data[2], email);
              }
         });
 
@@ -201,6 +204,76 @@ public class NotificationDialog extends JDialog {
         }
     }
 
+    // ==========================================
+    //              PASSWORD RESET LOGIC
+    // ==========================================
+    private void performPassReset(String reqId, String userId, String name, String email) {
+        int confirm = JOptionPane.showConfirmDialog(this, 
+            "Generate new password for " + name + "?", "Confirm Reset", JOptionPane.YES_NO_OPTION);
+            
+        if(confirm == JOptionPane.YES_OPTION) {
+            String newPass = generateRandomPassword();
+            try {
+                // 1. Database Update
+                Database.performPasswordReset(reqId, userId, newPass);
+                
+                // 2. Email Sending (Threaded to prevent freeze)
+                new Thread(() -> {
+                    try {
+                        sendEmail(email, name, userId, newPass);
+                        SwingUtilities.invokeLater(() -> 
+                            JOptionPane.showMessageDialog(this, "Reset successful! Credentials sent to " + email));
+                    } catch (MessagingException e) {
+                        e.printStackTrace();
+                        SwingUtilities.invokeLater(() -> 
+                            JOptionPane.showMessageDialog(this, "Password reset in DB, but email failed: " + e.getMessage(), "Email Error", JOptionPane.ERROR_MESSAGE));
+                    }
+                }).start();
+
+                refreshContent();
+            } catch (Exception e) {
+                e.printStackTrace();
+                JOptionPane.showMessageDialog(this, "Error processing reset: " + e.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
+    private String generateRandomPassword() {
+        String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        SecureRandom rnd = new SecureRandom();
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 8; i++) sb.append(chars.charAt(rnd.nextInt(chars.length())));
+        return sb.toString();
+    }
+
+    private void sendEmail(String to, String name, String user, String pass) throws MessagingException {
+        final String from = "sh4wntolentino@gmail.com"; 
+        final String pwd = "dkffdbkmlifnvows"; // App Password
+
+        Properties props = new Properties();
+        props.put("mail.smtp.auth", "true");
+        props.put("mail.smtp.starttls.enable", "true");
+        props.put("mail.smtp.host", "smtp.gmail.com");
+        props.put("mail.smtp.port", "587");
+
+        Session session = Session.getInstance(props, new Authenticator() {
+            protected PasswordAuthentication getPasswordAuthentication() {
+                return new PasswordAuthentication(from, pwd);
+            }
+        });
+
+        Message msg = new MimeMessage(session);
+        msg.setFrom(new InternetAddress(from));
+        msg.setRecipients(Message.RecipientType.TO, InternetAddress.parse(to));
+        msg.setSubject("Password Reset Successful");
+        msg.setText("Hello " + name + ",\n\nYour password reset request has been processed.\n\n" +
+                    "Username: " + user + "\n" +
+                    "New Password: " + pass + "\n\n" +
+                    "Please login and change your password immediately.");
+        Transport.send(msg);
+    }
+
+    // --- UI HELPERS ---
     private JPanel createBaseCard() {
         JPanel p = new JPanel(new BorderLayout(10, 5));
         p.setBackground(Color.WHITE);

@@ -158,6 +158,61 @@ public class Database {
             e.printStackTrace();
         }
     }
+    
+ // ---------------- CREATE ACCOUNT REQUESTS TABLE ----------------
+    public static void createAccountRequestsTable() {
+        String sql = "CREATE TABLE IF NOT EXISTS account_requests ("
+                   + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                   + "full_name TEXT NOT NULL, "
+                   + "email TEXT NOT NULL, "
+                   + "resume_path TEXT NOT NULL, " // We store the file path, not the blob
+                   + "status TEXT DEFAULT 'Pending', "
+                   + "request_date TEXT DEFAULT CURRENT_DATE"
+                   + ");";
+        try (Connection conn = connect(); Statement stmt = conn.createStatement()) {
+            stmt.execute(sql);
+        } catch (SQLException e) { e.printStackTrace(); }
+    }
+    
+ // ---------------- GET ACCOUNT REQUESTS ----------------
+    public static ResultSet getAccountRequests() {
+        // Returns ID, Name, Email, Date, and the File Path
+        String sql = "SELECT id, full_name, email, request_date, resume_path FROM account_requests WHERE status='Pending' ORDER BY id DESC";
+        try {
+            Connection conn = connect();
+            return conn.createStatement().executeQuery(sql);
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    // ---------------- DELETE ACCOUNT REQUEST ----------------
+    public static void deleteAccountRequest(int id) {
+        String sql = "DELETE FROM account_requests WHERE id = ?";
+        try (Connection conn = connect();
+             PreparedStatement pst = conn.prepareStatement(sql)) {
+            pst.setInt(1, id);
+            pst.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    // ---------------- INSERT ACCOUNT REQUEST ----------------
+    public static boolean insertAccountRequest(String name, String email, String path) {
+        String sql = "INSERT INTO account_requests (full_name, email, resume_path) VALUES (?, ?, ?)";
+        try (Connection conn = connect(); PreparedStatement pst = conn.prepareStatement(sql)) {
+            pst.setString(1, name);
+            pst.setString(2, email);
+            pst.setString(3, path);
+            pst.executeUpdate();
+            return true;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
 
     // ---------------- CREATE LEAVE REQUESTS TABLE ----------------
     public static void createLeaveTable() {
@@ -1471,6 +1526,40 @@ public class Database {
             e.printStackTrace();
         }
         return list;
+    }
+ // ---------------- DELETE EMPLOYEE ----------------
+    public static boolean deleteEmployee(String empNo) {
+        String sql = "DELETE FROM employees WHERE empNo = ?";
+        try (Connection conn = connect();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setString(1, empNo);
+            int rowsAffected = pstmt.executeUpdate();
+            
+            // Optional: Also clean up related records to prevent "orphan" data
+            if (rowsAffected > 0) {
+                deleteRelatedRecords(empNo); 
+            }
+            return rowsAffected > 0;
+            
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    // Helper to clean up related data (Optional but recommended)
+    private static void deleteRelatedRecords(String empNo) {
+        try (Connection conn = connect()) {
+            // Delete from other tables
+            conn.createStatement().execute("DELETE FROM attendance_records WHERE empNo='" + empNo + "'");
+            conn.createStatement().execute("DELETE FROM leave_requests WHERE empNo='" + empNo + "'");
+            conn.createStatement().execute("DELETE FROM requests WHERE empNo='" + empNo + "'");
+            conn.createStatement().execute("DELETE FROM notifications WHERE empNo='" + empNo + "'");
+            conn.createStatement().execute("DELETE FROM payslips WHERE empNo='" + empNo + "'");
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
     }
  // ---------------- MARK UNPAID LEAVE (DIRECT INSERT) ----------------
     public static void markUnpaidLeave(String empNo, String date) {

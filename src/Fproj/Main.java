@@ -23,7 +23,19 @@ public class Main {
     	Database.createACRTable();
     	Database.insertDefaultAdmin();
     	Database.createPayslipsTable();
+    	Database.createAccountRequestsTable();
     	
+    	// Add Shutdown Hook for Auto-Backup
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            System.out.println("Performing auto-backup...");
+            try {
+                BackupManager.createBackup();
+                System.out.println("Backup successful!");
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }));
+        
         frame = new JFrame("Attendance & Payroll System");
         frame.setSize(1000, 500);
         frame.setMinimumSize(new Dimension(1000, 500));

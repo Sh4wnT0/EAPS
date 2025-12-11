@@ -165,11 +165,18 @@ public class EmpOTPanel extends JPanel {
 
     private void loadRequests() {
         model.setRowCount(0);
-        String sql = "SELECT id, request_type, details, start_date, end_date, reason, status FROM requests WHERE empNo=? ORDER BY id DESC";
+        // Added WHERE clause to filter specifically for 'OT' or 'Holiday' types
+        String sql = "SELECT id, request_type, details, start_date, end_date, reason, status " +
+                     "FROM requests " +
+                     "WHERE empNo=? AND (request_type = 'OT' OR request_type = 'Holiday') " +
+                     "ORDER BY id DESC";
+                     
         try (Connection conn = Database.connect();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
             pstmt.setString(1, empNo);
             ResultSet rs = pstmt.executeQuery();
+            
             while (rs.next()) {
                 model.addRow(new Object[]{
                         rs.getInt("id"),
@@ -179,8 +186,8 @@ public class EmpOTPanel extends JPanel {
                         rs.getString("end_date"),
                         rs.getString("reason"),
                         rs.getString("status"),
-                        "Edit",   // Added
-                        "Delete"  // Added
+                        "Edit",   
+                        "Delete"  
                 });
             }
         } catch (SQLException e) {

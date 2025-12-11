@@ -194,8 +194,8 @@ public class EmpPayrollPanel extends JPanel {
             addSectionHeader(pnlContent, gbc, y++, "ATTENDANCE SUMMARY");
             addRow(pnlContent, gbc, y++, "Days Present:", String.valueOf(pres));
             addRow(pnlContent, gbc, y++, "Days Absent:", String.valueOf(abs));
-            addRow(pnlContent, gbc, y++, "Late (mins):", String.valueOf(late));
-            addRow(pnlContent, gbc, y++, "Undertime (mins):", String.valueOf(under));
+            addRow(pnlContent, gbc, y++, "Days Late:", String.valueOf(late));
+            addRow(pnlContent, gbc, y++, "Days Undertime:", String.valueOf(under));
             
             gbc.gridy = y++; pnlContent.add(Box.createVerticalStrut(15), gbc);
             

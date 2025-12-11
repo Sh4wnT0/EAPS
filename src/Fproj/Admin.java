@@ -85,6 +85,24 @@ public class Admin extends JPanel {
         JButton btnLogout = new JButton("Log-out");
         styleHeaderButton(btnLogout, LOGOUT_BTN);
         btnLogout.addActionListener(e -> Main.cardLayout.show(Main.cardPanel, "main"));
+        
+        JButton btnBackup = new JButton("Backup Data Now");
+        styleHeaderButton(btnBackup, LOGOUT_BTN);
+        btnBackup.addActionListener(e -> {
+            try {
+                // Change cursor to wait
+                setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+                
+                BackupManager.createBackup();
+                
+                setCursor(Cursor.getDefaultCursor());
+                JOptionPane.showMessageDialog(this, "Backup created successfully in /backups folder.");
+            } catch (Exception ex) {
+                setCursor(Cursor.getDefaultCursor());
+                JOptionPane.showMessageDialog(this, "Backup failed: " + ex.getMessage());
+            }
+        });
+        actions.add(btnBackup);
 
         actions.add(btnNotifs);
         actions.add(btnLogout);

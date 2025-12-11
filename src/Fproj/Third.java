@@ -130,6 +130,11 @@ public class Third extends JPanel {
         btnRequest = new JButton("Request");
         styleButton(btnRequest);
         btnRequest.setPreferredSize(new Dimension(180, 40));
+        btnRequest.addActionListener(e -> {
+            // Open the dialog
+            RequestAccountDialog dialog = new RequestAccountDialog((Frame) SwingUtilities.getWindowAncestor(this));
+            dialog.setVisible(true);
+        });
         gbcRight.gridy = 2;
         gbcRight.insets = new Insets(30, 0, 10, 0);
         right.add(btnRequest, gbcRight);
