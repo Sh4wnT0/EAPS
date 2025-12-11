@@ -226,6 +226,7 @@ public class OTAdmin extends JPanel {
     }
 
     // ---------------- LOGIC METHODS (UNCHANGED) ----------------
+ // ---------------- LOGIC METHODS ----------------
     void fetchRequests() {
         model.setRowCount(0);
 
@@ -237,11 +238,16 @@ public class OTAdmin extends JPanel {
             "SELECT r.id, r.submitted_date, e.name, r.empNo, r.request_type, r.status, r.details, r.start_date, r.end_date " +
             "FROM requests r " +
             "JOIN employees e ON r.empNo = e.empNo " +
-            "WHERE 1=1 "
+            "WHERE (r.request_type = 'OT' OR r.request_type = 'Holiday') " // <--- PRIMARY FILTER
         );
 
+        // Append filters dynamically
         if (!empNoSearch.isEmpty()) sql.append("AND r.empNo LIKE ? ");
+        
+        // If "All" is selected in dropdown, we don't add extra filter (the WHERE above handles the base types)
+        // If "OT" or "Holiday" is selected specifically, we add that constraint.
         if (!"All".equals(typeFilter)) sql.append("AND r.request_type = ? ");
+        
         if (!"All".equals(statusFilter)) sql.append("AND r.status = ? ");
 
         sql.append("ORDER BY r.submitted_date DESC");

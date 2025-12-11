@@ -1,131 +1,221 @@
 package Fproj;
 
-import java.awt.Color;
-import java.awt.Dimension;
-import java.awt.Font;
-import java.awt.Graphics;
-import java.awt.Graphics2D;
-import java.awt.Image;
-
-import javax.swing.ImageIcon;
-import javax.swing.JButton;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.SwingConstants;
+import java.awt.*;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
+import java.io.File;
+import javax.swing.*;
+import javax.swing.border.EmptyBorder;
 
 public class contacts extends JPanel {
 
+    private Image companyImage; 
+    private JPanel textPanel; 
+    
+    // UI Fields (Promoted to class level so we can update them)
+    private JLabel lblLocStatic, lblAddrLine1, lblAddrLine2, lblContactInfo;
+
     public contacts() {
-
-        setLayout(null);
-        setPreferredSize(new Dimension(1000, 600));
-
-        // ===========================
-        // LEFT DARK GREEN BAR
-        // ===========================
-        JPanel leftBar = new JPanel();
-        leftBar.setBackground(new Color(10, 60, 50));
-        leftBar.setBounds(0, 0, 175, 600);
-        leftBar.setLayout(null);
-        add(leftBar);
-
-        JLabel lblContacts = new JLabel("CONTACTS");
-        lblContacts.setFont(new Font("Serif", Font.BOLD, 26));
-        lblContacts.setForeground(Color.WHITE);
-
-        JLabel rotated = rotateLabel(lblContacts);
-        rotated.setBounds(5, 100, 70, 400);
-        leftBar.add(rotated);
-        
-                // ===========================
-                // BACK BUTTON (Put First)
-                // ===========================
-                JButton btnBack = new JButton("Back");
-                btnBack.setBounds(64, 10, 90, 28);
-                leftBar.add(btnBack);
-                btnBack.setBackground(new Color(255, 0, 0));
-                btnBack.setForeground(Color.WHITE);
-                btnBack.addActionListener(e -> Main.cardLayout.show(Main.cardPanel, "main"));
+        setLayout(new BorderLayout());
+        setBackground(Color.WHITE);
 
         // ===========================
-        // TEXT AREA (LEFT SIDE)
+        // LEFT SIDEBAR (Fixed Width)
         // ===========================
-        JPanel textPanel = new JPanel();
-        textPanel.setLayout(null);
+        JPanel sidebar = new JPanel(new BorderLayout());
+        sidebar.setBackground(new Color(10, 60, 50));
+        sidebar.setPreferredSize(new Dimension(100, 0));
+
+        // Back Button
+        JPanel topBtnContainer = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        topBtnContainer.setOpaque(false);
+        JButton btnBack = new JButton("Back");
+        btnBack.setBackground(new Color(255, 50, 50));
+        btnBack.setForeground(Color.WHITE);
+        btnBack.setFocusPainted(false);
+        btnBack.setFont(new Font("SansSerif", Font.BOLD, 12));
+        btnBack.addActionListener(e -> Main.cardLayout.show(Main.cardPanel, "main"));
+        topBtnContainer.add(btnBack);
+        sidebar.add(topBtnContainer, BorderLayout.NORTH);
+
+        // Vertical Text
+        JComponent verticalText = new JComponent() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                
+                Font font = new Font("Serif", Font.BOLD, 32);
+                g2.setFont(font);
+                g2.setColor(Color.WHITE);
+                
+                String text = "CONTACTS";
+                FontMetrics fm = g2.getFontMetrics();
+                
+                g2.translate(getWidth() / 2, getHeight() / 2);
+                g2.rotate(-Math.PI / 2);
+                g2.drawString(text, -fm.stringWidth(text) / 2, 0); 
+                g2.dispose();
+            }
+        };
+        sidebar.add(verticalText, BorderLayout.CENTER);
+        add(sidebar, BorderLayout.WEST);
+
+        // ===========================
+        // CENTER CONTENT
+        // ===========================
+        JPanel contentPanel = new JPanel(new GridLayout(1, 2)); 
+        contentPanel.setBackground(Color.WHITE);
+
+        // --- 1. Text Info Panel ---
+        textPanel = new JPanel(new GridBagLayout());
         textPanel.setBackground(Color.WHITE);
-        textPanel.setBounds(173, 0, 327, 600);
-        add(textPanel);
+        textPanel.setBorder(new EmptyBorder(40, 40, 40, 40));
 
-        JLabel lblLocation = new JLabel("Lipa City, ");
-        lblLocation.setFont(new Font("Serif", Font.PLAIN, 50));
-        lblLocation.setBounds(0, 160, 350, 71);
-        textPanel.add(lblLocation);
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0; 
+        gbc.gridy = GridBagConstraints.RELATIVE;
+        gbc.anchor = GridBagConstraints.WEST;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.insets = new Insets(5, 0, 5, 0); 
 
-        JLabel lblGetInTouch = new JLabel("<html><h3>Get in Touch:</h3>"
-                + "01258568<br>"
-                + "Fujiko@gmail.com</html>");
-        lblGetInTouch.setFont(new Font("Arial", Font.PLAIN, 16));
-        lblGetInTouch.setBounds(10, 300, 458, 120);
-        textPanel.add(lblGetInTouch);
-        
-        JLabel lblLocation_1 = new JLabel("Located in");
-        lblLocation_1.setFont(new Font("Serif", Font.PLAIN, 50));
-        lblLocation_1.setBounds(0, 96, 350, 100);
-        textPanel.add(lblLocation_1);
-        
-        JLabel lblBatangas = new JLabel("Batangas");
-        lblBatangas.setFont(new Font("Serif", Font.PLAIN, 50));
-        lblBatangas.setBounds(0, 219, 350, 71);
-        textPanel.add(lblBatangas);
-        
-        JLabel lblBatangas_1 = new JLabel("_____________________________");
-        lblBatangas_1.setFont(new Font("Serif", Font.PLAIN, 50));
-        lblBatangas_1.setBounds(0, 258, 386, 71);
-        textPanel.add(lblBatangas_1);
-        
-                // ===========================
-                // RIGHT IMAGE (FIXED)
-                // ===========================
-                JLabel imageLabel = new JLabel();
-                imageLabel.setBounds(322, -80, 751, 600);
-                add(imageLabel);
-                imageLabel.setIcon(new ImageIcon(contacts.class.getResource("/Fproj/contacts.png")));
+        // Initialize Labels (Empty for now, filled by refreshData)
+        lblLocStatic = addResponsiveLabel("Located in", Font.PLAIN, 40, gbc);
+        lblAddrLine1 = addResponsiveLabel("", Font.BOLD, 48, gbc);
+        lblAddrLine2 = addResponsiveLabel("", Font.PLAIN, 40, gbc);
 
-        // SAFELY LOAD IMAGE
-        ImageIcon icon = null;
+        // Separator
+        JSeparator sep = new JSeparator();
+        sep.setForeground(Color.BLACK);
+        gbc.insets = new Insets(20, 0, 20, 0);
+        textPanel.add(sep, gbc);
 
-        try {
-            icon = new ImageIcon(getClass().getResource("/resources/contacts"));
-        } catch (Exception e) {
-            System.out.println("ERROR: Image not found in resources folder.");
+        // Contact Info
+        gbc.insets = new Insets(5, 0, 5, 0);
+        addResponsiveLabel("Get in Touch:", Font.BOLD, 18, gbc);
+        lblContactInfo = addResponsiveLabel("", Font.PLAIN, 16, gbc);
+
+        // --- 2. Image Panel ---
+        JPanel imagePanel = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                if (companyImage != null) {
+                    g.drawImage(companyImage, 0, 0, getWidth(), getHeight(), this);
+                } else {
+                    g.setColor(new Color(240, 240, 240));
+                    g.fillRect(0, 0, getWidth(), getHeight());
+                    g.setColor(Color.RED);
+                    g.drawString("Image Not Found", getWidth()/2 - 40, getHeight()/2);
+                }
+            }
+        };
+
+        contentPanel.add(textPanel);
+        contentPanel.add(imagePanel);
+        add(contentPanel, BorderLayout.CENTER);
+
+        // ===========================
+        // LISTENERS
+        // ===========================
+        this.addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent e) {
+                resizeFonts();
+            }
+            
+            // THIS UPDATES DATA EVERY TIME PANEL IS SHOWN
+            @Override
+            public void componentShown(ComponentEvent e) {
+                refreshContactDetails();
+            }
+        });
+        
+        // Initial load
+        refreshContactDetails();
+    }
+
+    // --- LOGIC TO REFRESH DATA ---
+    private void refreshContactDetails() {
+        String[] info = Database.getCompanyInfo();
+        String compAddress = info[1];
+        String compContact = info[2];
+        String logoPath = info[3];
+
+        // Address Logic
+        String line2 = "Address Not Set";
+        String line3 = "";
+
+        if (compAddress != null && !compAddress.isEmpty()) {
+            String[] parts = compAddress.split(",");
+            if (parts.length >= 1) line2 = parts[0].trim() + ",";
+            if (parts.length >= 2) line3 = parts[1].trim();
+            if (parts.length == 1) { line2 = compAddress; line3 = ""; }
         }
 
-        if (icon != null && icon.getImage() != null) {
-            Image scaled = icon.getImage().getScaledInstance(480, 600, Image.SCALE_SMOOTH);
-            imageLabel.setIcon(new ImageIcon(scaled));
-        } else {
-            imageLabel.setText("Image Not Found");
-            imageLabel.setHorizontalAlignment(SwingConstants.CENTER);
-            imageLabel.setForeground(Color.RED);
+        // Update Labels
+        lblAddrLine1.setText(line2);
+        lblAddrLine2.setText(line3);
+        lblContactInfo.setText("<html>" + compContact + "</html>");
+
+        // Reload Image
+        loadCompanyImage(logoPath);
+        
+        // Refresh UI
+        revalidate();
+        repaint();
+    }
+
+    private JLabel addResponsiveLabel(String text, int style, int baseSize, GridBagConstraints gbc) {
+        JLabel l = new JLabel(text);
+        l.setFont(new Font("Serif", style, baseSize));
+        l.putClientProperty("baseSize", (float) baseSize); 
+        textPanel.add(l, gbc);
+        return l;
+    }
+
+    private void resizeFonts() {
+        int height = getHeight();
+        if (height == 0) return;
+        float ratio = (float) height / 600f;
+        ratio = Math.max(0.8f, Math.min(ratio, 2.5f));
+
+        for (Component comp : textPanel.getComponents()) {
+            if (comp instanceof JLabel) {
+                JLabel lbl = (JLabel) comp;
+                Object property = lbl.getClientProperty("baseSize");
+                if (property instanceof Float) {
+                    float baseSize = (Float) property;
+                    int newSize = Math.round(baseSize * ratio);
+                    if (lbl.getFont().getSize() != newSize) {
+                        lbl.setFont(lbl.getFont().deriveFont((float) newSize));
+                    }
+                }
+            }
         }
     }
 
-    // Rotate label 90 degrees
-    private JLabel rotateLabel(JLabel label) {
-        return new JLabel(label.getText()) {
-            @Override
-            protected void paintComponent(Graphics g) {
-                Graphics2D g2 = (Graphics2D) g.create();
-                g2.rotate(-Math.PI / 2, getWidth() / 2, getHeight() / 2);
-                super.paintComponent(g2);
-                g2.dispose();
+    private void loadCompanyImage(String logoPath) {
+        try {
+            ImageIcon icon = null;
+            if (logoPath != null && logoPath.equals("/Fproj/contacts.png")) {
+                java.net.URL imgURL = getClass().getResource(logoPath);
+                if (imgURL != null) icon = new ImageIcon(imgURL);
+            } 
+            else if (logoPath != null && new File(logoPath).exists()) {
+                icon = new ImageIcon(logoPath);
+            }
+            else {
+                java.net.URL imgURL = getClass().getResource("/Fproj/contacts.png");
+                if (imgURL != null) icon = new ImageIcon(imgURL);
             }
 
-            @Override
-            public Dimension getPreferredSize() {
-                Dimension size = super.getPreferredSize();
-                return new Dimension(size.height, size.width);
+            if (icon != null) {
+                this.companyImage = icon.getImage();
             }
-        };
+        } catch (Exception e) {
+            // Silently fail or log
+        }
     }
 }

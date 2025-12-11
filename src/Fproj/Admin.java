@@ -1,4 +1,4 @@
-package Fproj;
+package Fproj; //Update 4
 
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
@@ -31,18 +31,18 @@ public class Admin extends JPanel {
     private String currentAdminUsername;
 
     // Sidebar buttons
-    private JButton btnHome, btnProfile, btnLeaveReq, btnOTReq, btnRecords, btnAttendance, btnPayroll;
+    private JButton btnHome, btnProfile, btnLeaveReq, btnOTReq, btnRecords, btnAttendance, btnPayroll, btnSettings;
     private JButton currentSelectedButton = null;
 
     // Panel References
-    private HomePanel homePanel;
+    private AdminHomePanel homePanel;
     private adProfile profilePanel;
     private LeaveApproval leavePanel;
     private OTAdmin otPanel;
     private AdminRecords recordsPanel;
     private adminAttendance attendancePanel;
     private adminPayroll payrollPanel;
-
+    private AdminSettings settingPanel;
     // Colors
     private final Color BRAND_COLOR = new Color(22, 102, 87);
     private final Color SIDEBAR_BG = new Color(240, 244, 248);
@@ -67,13 +67,14 @@ public class Admin extends JPanel {
         innerCardPanel.setBackground(Color.WHITE);
 
         // Initialize Panels
-        homePanel = new HomePanel();
+        homePanel = new AdminHomePanel();
         profilePanel = new adProfile(this.currentAdminUsername);
         leavePanel = new LeaveApproval();
         otPanel = new OTAdmin();
         recordsPanel = new AdminRecords();
         attendancePanel = new adminAttendance();
         payrollPanel = new adminPayroll();
+        settingPanel = new AdminSettings();
 
         // Add Panels to CardLayout
         innerCardPanel.add(homePanel, "home");
@@ -83,6 +84,7 @@ public class Admin extends JPanel {
         innerCardPanel.add(recordsPanel, "records");
         innerCardPanel.add(attendancePanel, "attendance");
         innerCardPanel.add(payrollPanel, "payroll");
+        innerCardPanel.add(settingPanel, "settings");
 
         add(innerCardPanel, BorderLayout.CENTER);
 
@@ -141,7 +143,7 @@ public class Admin extends JPanel {
         btnNotifs.addActionListener(e -> {
             java.awt.Window win = SwingUtilities.getWindowAncestor(this);
             if (win instanceof java.awt.Frame) {
-                new NotificationDialog((java.awt.Frame) win, currentAdminUsername).setVisible(true);
+                new NotificationDialog((java.awt.Frame) win, currentAdminUsername, true).setVisible(true);
             }
         });
 
@@ -197,6 +199,8 @@ public class Admin extends JPanel {
         btnRecords = createMenuButton("Employees", "profile.png");
         btnAttendance = createMenuButton("Attendance", "attendance.png");
         btnPayroll = createMenuButton("Payroll", "payroll.png");
+        btnSettings = createMenuButton("Company", "settings.png");
+        
 
         // Add to Sidebar
         sidebar.add(btnHome, gbc); gbc.gridy++;
@@ -215,6 +219,7 @@ public class Admin extends JPanel {
         sidebar.add(btnRecords, gbc); gbc.gridy++;
         sidebar.add(btnAttendance, gbc); gbc.gridy++;
         sidebar.add(btnPayroll, gbc); gbc.gridy++;
+        sidebar.add(btnSettings, gbc); gbc.gridy++;
 
         // Filler
         GridBagConstraints gbcFiller = new GridBagConstraints();
@@ -256,6 +261,10 @@ public class Admin extends JPanel {
         btnPayroll.addActionListener(e -> {
             innerCardLayout.show(innerCardPanel, "payroll");
             selectButton(btnPayroll);
+        });
+        btnSettings.addActionListener(e -> {
+            innerCardLayout.show(innerCardPanel, "settings");
+            selectButton(btnSettings);
         });
     }
 
@@ -315,29 +324,5 @@ public class Admin extends JPanel {
         currentSelectedButton.setBackground(ACTIVE_COLOR);
         currentSelectedButton.setForeground(BRAND_COLOR);
         currentSelectedButton.setFont(new Font("Segoe UI", Font.BOLD, 14));
-    }
-
-    // --- Inner Classes ---
-    private class HomePanel extends JPanel {
-        public HomePanel() {
-            setLayout(new GridBagLayout());
-            setBackground(Color.WHITE);
-
-            JLabel lblWelcome = new JLabel("Welcome back, Admin!");
-            lblWelcome.setFont(new Font("Segoe UI", Font.BOLD, 28));
-            lblWelcome.setForeground(BRAND_COLOR);
-            
-            JLabel lblSub = new JLabel("Select an option from the sidebar to begin.");
-            lblSub.setFont(new Font("Segoe UI", Font.PLAIN, 16));
-            lblSub.setForeground(Color.GRAY);
-
-            GridBagConstraints gbc = new GridBagConstraints();
-            gbc.gridx = 0; gbc.gridy = 0;
-            add(lblWelcome, gbc);
-            
-            gbc.gridy = 1;
-            gbc.insets = new Insets(10, 0, 0, 0);
-            add(lblSub, gbc);
-        }
     }
 }

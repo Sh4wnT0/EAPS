@@ -1229,4 +1229,290 @@ public class Database {
 
         return null; // User not found in either table
     }
+    
+ // ==========================================
+    //           ANALYTICS QUERIES
+    // ==========================================
+
+    // 1. WORKFORCE COUNTS
+    public static int countTotalEmployees() {
+        return getCount("SELECT COUNT(*) FROM employees");
+    }
+
+    public static int countEmployeesByStatus(String status) {
+        String sql = "SELECT COUNT(*) FROM employees WHERE employmentStatus = ?";
+        try (Connection conn = connect();
+             PreparedStatement pst = conn.prepareStatement(sql)) {
+            pst.setString(1, status);
+            ResultSet rs = pst.executeQuery();
+            if (rs.next()) return rs.getInt(1);
+        } catch (SQLException e) { e.printStackTrace(); }
+        return 0;
+    }
+
+    // 2. ATTENDANCE TODAY
+    public static int countPresentToday() {
+        // Count records where time_in is NOT NULL and NOT the placeholder "00:00:00 AM"
+        String sql = "SELECT COUNT(*) FROM attendance_records WHERE date = CURRENT_DATE AND time_in IS NOT NULL AND time_in != '00:00:00 AM' AND status != 'Absent'";
+        return getCount(sql);
+    }
+
+    public static int countLateToday() {
+        String sql = "SELECT COUNT(*) FROM attendance_records WHERE date = CURRENT_DATE AND status LIKE '%Late%'";
+        return getCount(sql);
+    }
+
+    public static int countOnLeaveToday() {
+        // Checks leave_requests for approved leaves spanning today
+        String sql = "SELECT COUNT(*) FROM leave_requests WHERE status = 'Approved' AND date('now') BETWEEN start_date AND end_date";
+        return getCount(sql);
+    }
+
+    // 3. PENDING ACTIONS (To-Do List)
+    public static int countPendingLeaves() {
+        return getCount("SELECT COUNT(*) FROM leave_requests WHERE status = 'Pending'");
+    }
+
+    public static int countPendingOT() {
+        return getCount("SELECT COUNT(*) FROM requests WHERE (request_type = 'OT' OR request_type = 'Holiday') AND status = 'Pending'");
+    }
+
+    public static int countPendingResets() {
+        return getCount("SELECT COUNT(*) FROM requests WHERE request_type = 'Password Reset' AND status = 'Pending'");
+    }
+    
+ // ---------------- INSERT PAYSLIP REQUEST (FIXED) ----------------
+    public static void insertPayslipRequest(String empNo) {
+        String sql = "SELECT name, email FROM employees WHERE empNo = ?";
+        
+        // FIX APPLIED: Added 'start_date' to the insert list and used 'CURRENT_DATE' as the value
+        String insertSql = "INSERT INTO requests (empNo, name, email, request_type, details, reason, status, submitted_date, start_date) " +
+                           "VALUES (?, ?, ?, 'Payslip', 'Request for latest payslip', 'Employee requested copy', 'Pending', CURRENT_DATE, CURRENT_DATE)";
+        
+        try (Connection conn = connect()) {
+            String name = "";
+            String email = "";
+            
+            // 1. Get Employee Details
+            try (PreparedStatement pst = conn.prepareStatement(sql)) {
+                pst.setString(1, empNo);
+                ResultSet rs = pst.executeQuery();
+                if (rs.next()) {
+                    name = rs.getString("name");
+                    email = rs.getString("email");
+                }
+            }
+            
+            // 2. Insert Request
+            try (PreparedStatement pst = conn.prepareStatement(insertSql)) {
+                pst.setString(1, empNo);
+                pst.setString(2, name);
+                pst.setString(3, email);
+                pst.executeUpdate();
+            }
+            
+            // 3. Notify Admin
+            sendNotification("admin", "Payslip Requested by: " + name + " (" + empNo + ")");
+            
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+ // --- NEW ANALYTICS QUERIES ---
+
+    // 1. Count Absent Employees Today (Total Active - Present - On Leave)
+    public static int countAbsentToday() {
+        int total = countTotalEmployees();
+        int present = countPresentToday();
+        int onLeave = countOnLeaveToday();
+        // Assuming anyone not present and not on leave is absent
+        // (This is a simplified calculation suitable for a dashboard snapshot)
+        int absent = total - (present + onLeave);
+        return Math.max(0, absent); 
+    }
+
+    // 2. Count Pending Payslip Requests
+    public static int countPendingPayslipRequests() {
+        return getCount("SELECT COUNT(*) FROM requests WHERE request_type = 'Payslip' AND status = 'Pending'");
+    }
+
+    // Helper for simple count queries
+    private static int getCount(String sql) {
+        try (Connection conn = connect();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            if (rs.next()) return rs.getInt(1);
+        } catch (SQLException e) { e.printStackTrace(); }
+        return 0;
+    }
+    
+ // ---------------- CREATE COMPANY INFO TABLE ----------------
+    public static void createCompanyInfoTable() {
+        // Single row table logic
+        String sql = "CREATE TABLE IF NOT EXISTS company_info ("
+                   + "id INTEGER PRIMARY KEY CHECK (id = 1), " // Enforce single row
+                   + "name TEXT, "
+                   + "address TEXT, "
+                   + "contact TEXT, "
+                   + "logo_path TEXT"
+                   + ");";
+        
+        // Announcements table
+        String sql2 = "CREATE TABLE IF NOT EXISTS announcements ("
+                    + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                    + "title TEXT, "
+                    + "message TEXT, "
+                    + "date TEXT DEFAULT CURRENT_DATE"
+                    + ");";
+
+        try (Connection conn = connect(); Statement stmt = conn.createStatement()) {
+            stmt.execute(sql);
+            stmt.execute(sql2);
+            // Initialize empty row 1 if not exists
+            stmt.execute("INSERT OR IGNORE INTO company_info (id, name, address, contact) VALUES (1, 'Your Company', 'Address Here', 'Contact Here')");
+        } catch (SQLException e) { e.printStackTrace(); }
+    }
+
+    // ---------------- GETTERS & SETTERS FOR SETTINGS ----------------
+    public static String[] getCompanyInfo() {
+        String sql = "SELECT name, address, contact, logo_path FROM company_info WHERE id = 1";
+        try (Connection conn = connect(); Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+            if (rs.next()) {
+                return new String[]{rs.getString("name"), rs.getString("address"), rs.getString("contact"), rs.getString("logo_path")};
+            }
+        } catch (Exception e) { e.printStackTrace(); }
+        return new String[]{"", "", "", ""};
+    }
+
+    public static void updateCompanyInfo(String name, String addr, String contact, String path) {
+        String sql = "UPDATE company_info SET name=?, address=?, contact=?, logo_path=? WHERE id=1";
+        try (Connection conn = connect(); PreparedStatement pst = conn.prepareStatement(sql)) {
+            pst.setString(1, name); pst.setString(2, addr); pst.setString(3, contact); pst.setString(4, path);
+            pst.executeUpdate();
+        } catch (Exception e) { e.printStackTrace(); }
+    }
+
+    public static void addAnnouncement(String title, String msg) {
+        String sql = "INSERT INTO announcements (title, message, date) VALUES (?, ?, CURRENT_DATE)";
+        try (Connection conn = connect(); PreparedStatement pst = conn.prepareStatement(sql)) {
+            pst.setString(1, title); pst.setString(2, msg); pst.executeUpdate();
+        } catch (Exception e) { e.printStackTrace(); }
+    }
+    
+    public static void deleteAnnouncement(int id) {
+        try (Connection conn = connect(); PreparedStatement pst = conn.prepareStatement("DELETE FROM announcements WHERE id=?")) {
+            pst.setInt(1, id); pst.executeUpdate();
+        } catch (Exception e) { e.printStackTrace(); }
+    }
+ // ---------------- GET ALL PENDING REQUESTS (FOR ADMIN NOTIFICATIONS) ----------------
+    // Returns list of: [ReqID, EmpNo, Name, Type, Details, Date]
+    public static java.util.List<String[]> getAdminPendingRequests() {
+        java.util.List<String[]> list = new java.util.ArrayList<>();
+        
+        // Fetch all requests (Password Reset, Payslip, OT, Leave) that are still Pending
+        String sql = "SELECT id, empNo, name, request_type, details, submitted_date " + 
+                     "FROM requests WHERE status = 'Pending' ORDER BY submitted_date DESC";
+
+        try (Connection conn = connect();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+
+            while (rs.next()) {
+                list.add(new String[]{
+                    String.valueOf(rs.getInt("id")),      // Index 0
+                    rs.getString("empNo"),                // Index 1
+                    rs.getString("name"),                 // Index 2
+                    rs.getString("request_type"),         // Index 3
+                    rs.getString("details"),              // Index 4
+                    rs.getString("submitted_date")        // Index 5
+                });
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return list;
+    }
+ // ---------------- MARK UNPAID LEAVE (DIRECT INSERT) ----------------
+    public static void markUnpaidLeave(String empNo, String date) {
+        // We check if a record exists first to avoid primary key collisions or duplicates
+        String checkSql = "SELECT id FROM attendance_records WHERE empNo = ? AND date = ?";
+        
+        // If it exists, we update it; if not, we insert it.
+        String insertSql = "INSERT INTO attendance_records (empNo, date, time_in, time_out, status, workday) " +
+                           "VALUES (?, ?, '00:00:00 AM', '00:00:00 PM', 'Absent', 'UL')";
+                           
+        String updateSql = "UPDATE attendance_records SET status = 'Absent', workday = 'UL', " +
+                           "time_in = '00:00:00 AM', time_out = '00:00:00 PM' WHERE empNo = ? AND date = ?";
+
+        try (Connection conn = connect()) {
+            boolean exists = false;
+            try (PreparedStatement check = conn.prepareStatement(checkSql)) {
+                check.setString(1, empNo);
+                check.setString(2, date);
+                ResultSet rs = check.executeQuery();
+                if (rs.next()) exists = true;
+            }
+
+            if (exists) {
+                try (PreparedStatement upd = conn.prepareStatement(updateSql)) {
+                    upd.setString(1, empNo);
+                    upd.setString(2, date);
+                    upd.executeUpdate();
+                }
+            } else {
+                try (PreparedStatement ins = conn.prepareStatement(insertSql)) {
+                    ins.setString(1, empNo);
+                    ins.setString(2, date);
+                    ins.executeUpdate();
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+ 
+
+ // 1. Get a specific request by ID (for pre-filling the Edit Dialog)
+ public static ResultSet getRequestById(int id) {
+     String sql = "SELECT * FROM requests WHERE id = ?";
+     try {
+         Connection conn = connect();
+         PreparedStatement pstmt = conn.prepareStatement(sql);
+         pstmt.setInt(1, id);
+         return pstmt.executeQuery(); 
+     } catch (SQLException e) {
+         e.printStackTrace();
+         return null;
+     }
+ }
+
+ // 2. Update an existing request
+ public static void updateRequest(int id, String type, String details, String start, String end, String reason) {
+     String sql = "UPDATE requests SET request_type = ?, details = ?, start_date = ?, end_date = ?, reason = ? WHERE id = ?";
+     try (Connection conn = connect();
+          PreparedStatement pstmt = conn.prepareStatement(sql)) {
+         pstmt.setString(1, type);
+         pstmt.setString(2, details); // Hours for OT, Type for Holiday
+         pstmt.setString(3, start);
+         pstmt.setString(4, end);
+         pstmt.setString(5, reason);
+         pstmt.setInt(6, id);
+         pstmt.executeUpdate();
+     } catch (SQLException e) {
+         e.printStackTrace();
+     }
+ }
+
+ // 3. Delete a request
+ public static void deleteRequest(int id) {
+     String sql = "DELETE FROM requests WHERE id = ?";
+     try (Connection conn = connect();
+          PreparedStatement pstmt = conn.prepareStatement(sql)) {
+         pstmt.setInt(1, id);
+         pstmt.executeUpdate();
+     } catch (SQLException e) {
+         e.printStackTrace();
+     }
+ }
 }

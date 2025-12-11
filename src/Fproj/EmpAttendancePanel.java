@@ -138,6 +138,8 @@ public class EmpAttendancePanel extends JPanel {
                         c.setBackground(new Color(255, 240, 200)); // Light Orange
                     } else if ("Leave".equalsIgnoreCase(status)) {
                         c.setBackground(new Color(255, 255, 200)); // Yellow
+                    } else if ("Working".equalsIgnoreCase(status) || "Working (OT)".equalsIgnoreCase(status)) {
+                        c.setBackground(new Color(200, 240, 255)); // Light Blue
                     } else if ("Absent".equalsIgnoreCase(status)) {
                         c.setBackground(new Color(255, 220, 220)); // Light Red
                     } else {
@@ -467,114 +469,90 @@ public class EmpAttendancePanel extends JPanel {
         } catch (Exception e) { e.printStackTrace(); }
     }
 
-    // --- Main Attendance Logic ---
     private void saveRecord(String type) {
         try (Connection con = DriverManager.getConnection("jdbc:sqlite:employees.db")) {
             String today = new SimpleDateFormat("yyyy-MM-dd").format(new Date());
             String now = new SimpleDateFormat("hh:mm:ss a").format(new Date());
 
-            String currentWorkday = null;
-            try (PreparedStatement workdayPs = con.prepareStatement("SELECT workday FROM attendance_records WHERE empNo = ? AND date = ?")) {
-                workdayPs.setString(1, empNo);
-                workdayPs.setString(2, today);
-                ResultSet rs = workdayPs.executeQuery();
-                if (rs.next()) currentWorkday = rs.getString("workday");
+            // 1. Fetch current row details
+            String currentWorkday = "regular"; // Default
+            int totalUpdateCount = 0;
+            String existingTimeIn = null;
+            String existingTimeOut = null;
+            String existingSecondTimeOut = null;
+            boolean rowExists = false;
+
+            String fetchSql = "SELECT workday, total_update_count, time_in, time_out, second_time_out FROM attendance_records WHERE empNo = ? AND date = ?";
+            try (PreparedStatement ps = con.prepareStatement(fetchSql)) {
+                ps.setString(1, empNo);
+                ps.setString(2, today);
+                ResultSet rs = ps.executeQuery();
+                if (rs.next()) {
+                    rowExists = true;
+                    currentWorkday = rs.getString("workday");
+                    totalUpdateCount = rs.getInt("total_update_count");
+                    existingTimeIn = rs.getString("time_in");
+                    existingTimeOut = rs.getString("time_out");
+                    existingSecondTimeOut = rs.getString("second_time_out");
+                }
             }
 
-            boolean allowUpdates = "OT".equals(currentWorkday) || "SH".equals(currentWorkday) || "RH".equals(currentWorkday);
+            // 2. Define Update Limits based on Workday
+            boolean isOTDay = "OT".equals(currentWorkday) || "SH".equals(currentWorkday) || "RH".equals(currentWorkday);
+            int maxUpdates = isOTDay ? 4 : 2; // Allow 4 updates for OT (In, Out, OT-Out, Correction), 2 for Regular
 
+            if (totalUpdateCount >= maxUpdates) {
+                JOptionPane.showMessageDialog(null, "Update limit reached for today.");
+                return;
+            }
+
+            // 3. Process Logic
             if (type.equals("IN")) {
-                int totalUpdateCount = 0;
-                try (PreparedStatement countPs = con.prepareStatement("SELECT total_update_count FROM attendance_records WHERE empNo = ? AND date = ?")) {
-                    countPs.setString(1, empNo);
-                    countPs.setString(2, today);
-                    ResultSet rs = countPs.executeQuery();
-                    if (rs.next()) totalUpdateCount = rs.getInt("total_update_count");
-                }
-                if (totalUpdateCount >= 2) {
-                    JOptionPane.showMessageDialog(null, "Update limit reached for today.");
-                    return;
-                }
-
-                try (PreparedStatement checkPs = con.prepareStatement("SELECT time_in FROM attendance_records WHERE empNo=? AND date=?")) {
-                    checkPs.setString(1, empNo);
-                    checkPs.setString(2, today);
-                    ResultSet checkRs = checkPs.executeQuery();
-                    if (checkRs.next()) {
-                        String timeIn = checkRs.getString("time_in");
-                        if (timeIn == null || ("OT".equals(currentWorkday) && "00:00:00 AM".equals(timeIn))) {
-                            try (PreparedStatement ps = con.prepareStatement("UPDATE attendance_records SET time_in = ?, total_update_count = total_update_count + 1 WHERE empNo = ? AND date = ?")) {
-                                ps.setString(1, now);
-                                ps.setString(2, empNo);
-                                ps.setString(3, today);
-                                ps.executeUpdate();
-                            }
-                        } else {
-                            JOptionPane.showMessageDialog(null, "Time-in already recorded!");
-                            return;
-                        }
+                if (rowExists) {
+                    // If row exists, ensure we aren't overwriting an existing Time In
+                    if (existingTimeIn == null || existingTimeIn.isEmpty() || "00:00:00 AM".equals(existingTimeIn)) {
+                        updateDB("UPDATE attendance_records SET time_in = ?, total_update_count = total_update_count + 1 WHERE empNo = ? AND date = ?", now, today);
                     } else {
-                        try (PreparedStatement ps = con.prepareStatement("INSERT INTO attendance_records(empNo, date, time_in, workday, total_update_count) VALUES (?, ?, ?, ?, 1)")) {
-                            ps.setString(1, empNo);
-                            ps.setString(2, today);
-                            ps.setString(3, now);
-                            ps.setString(4, "regular");
-                            ps.executeUpdate();
-                        }
+                        JOptionPane.showMessageDialog(null, "Time-in already recorded!");
+                        return;
+                    }
+                } else {
+                    // Insert new record
+                    try (PreparedStatement ps = con.prepareStatement("INSERT INTO attendance_records(empNo, date, time_in, workday, total_update_count, status) VALUES (?, ?, ?, ?, 1, 'Working')")) {
+                        ps.setString(1, empNo);
+                        ps.setString(2, today);
+                        ps.setString(3, now);
+                        ps.setString(4, "regular"); // Default to regular unless admin set otherwise
+                        ps.executeUpdate();
                     }
                 }
             } else { // OUT
-                int totalUpdateCount = 0;
-                try (PreparedStatement countPs = con.prepareStatement("SELECT total_update_count FROM attendance_records WHERE empNo = ? AND date = ?")) {
-                    countPs.setString(1, empNo);
-                    countPs.setString(2, today);
-                    ResultSet rs = countPs.executeQuery();
-                    if (rs.next()) totalUpdateCount = rs.getInt("total_update_count");
-                }
-                if (totalUpdateCount >= 2) {
-                    JOptionPane.showMessageDialog(null, "Update limit reached for today.");
+                if (!rowExists) {
+                    JOptionPane.showMessageDialog(null, "You must Time In first!");
                     return;
                 }
+                
+                // Critical Check: Cannot Time Out if Time In is empty
+                if (existingTimeIn == null || "00:00:00 AM".equals(existingTimeIn)) {
+                     JOptionPane.showMessageDialog(null, "You must Time In before you can Time Out!");
+                     return;
+                }
 
-                try (PreparedStatement checkPs = con.prepareStatement("SELECT time_out, second_time_out FROM attendance_records WHERE empNo=? AND date=?")) {
-                    checkPs.setString(1, empNo);
-                    checkPs.setString(2, today);
-                    ResultSet checkRs = checkPs.executeQuery();
-                    if (checkRs.next()) {
-                        String timeOut = checkRs.getString("time_out");
-                        String secondTimeOut = checkRs.getString("second_time_out");
-                        if (timeOut == null) {
-                            try (PreparedStatement ps = con.prepareStatement("UPDATE attendance_records SET time_out = ?, total_update_count = total_update_count + 1 WHERE empNo = ? AND date = ?")) {
-                                ps.setString(1, now);
-                                ps.setString(2, empNo);
-                                ps.setString(3, today);
-                                ps.executeUpdate();
-                            }
-                        } else if (allowUpdates && secondTimeOut == null) {
-                            try (PreparedStatement ps = con.prepareStatement("UPDATE attendance_records SET second_time_out = ?, total_update_count = total_update_count + 1 WHERE empNo = ? AND date = ?")) {
-                                ps.setString(1, now);
-                                ps.setString(2, empNo);
-                                ps.setString(3, today);
-                                ps.executeUpdate();
-                            }
-                        } else {
-                            JOptionPane.showMessageDialog(null, "Time-out already recorded!");
-                            return;
-                        }
-                    } else {
-                        JOptionPane.showMessageDialog(null, "No time-in found for today!");
-                        return;
-                    }
+                if (existingTimeOut == null || existingTimeOut.isEmpty()) {
+                    // First Time Out (Regular Shift End)
+                    updateDB("UPDATE attendance_records SET time_out = ?, total_update_count = total_update_count + 1 WHERE empNo = ? AND date = ?", now, today);
+                } else if (isOTDay && (existingSecondTimeOut == null || existingSecondTimeOut.isEmpty())) {
+                    // Second Time Out (OT Shift End)
+                    updateDB("UPDATE attendance_records SET second_time_out = ?, total_update_count = total_update_count + 1 WHERE empNo = ? AND date = ?", now, today);
+                } else {
+                    JOptionPane.showMessageDialog(null, "Time-out already recorded!");
+                    return;
                 }
             }
 
+            // 4. Update Status
             String newStatus = calculateStatus(today);
-            try (PreparedStatement statusPs = con.prepareStatement("UPDATE attendance_records SET status = ? WHERE empNo = ? AND date = ?")) {
-                statusPs.setString(1, newStatus);
-                statusPs.setString(2, empNo);
-                statusPs.setString(3, today);
-                statusPs.executeUpdate();
-            }
+            updateDB("UPDATE attendance_records SET status = ? WHERE empNo = ? AND date = ?", newStatus, today);
 
             loadTable();
             JOptionPane.showMessageDialog(null, "Record Saved.");
@@ -585,53 +563,72 @@ public class EmpAttendancePanel extends JPanel {
         }
     }
 
-    private String calculateStatus(String dateStr) {
-        try {
-            java.time.LocalDate date = java.time.LocalDate.parse(dateStr);
-            java.time.DayOfWeek day = date.getDayOfWeek();
-            boolean isWorkday = !(day == java.time.DayOfWeek.SATURDAY || day == java.time.DayOfWeek.SUNDAY);
-            if (!isWorkday) return "";
-        } catch (Exception e) { return "Error"; }
-
+    // Helper to reduce code duplication
+    private void updateDB(String sql, String val1, String date) throws SQLException {
         try (Connection con = DriverManager.getConnection("jdbc:sqlite:employees.db");
-             PreparedStatement ps = con.prepareStatement("SELECT time_in, time_out, second_time_out, workday, status FROM attendance_records WHERE empNo = ? AND date = ?")) {
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, val1);
+            ps.setString(2, empNo);
+            ps.setString(3, date);
+            ps.executeUpdate();
+        }
+    }
+
+    private String calculateStatus(String dateStr) {
+        try (Connection con = DriverManager.getConnection("jdbc:sqlite:employees.db");
+             PreparedStatement ps = con.prepareStatement("SELECT time_in, time_out, second_time_out, workday FROM attendance_records WHERE empNo = ? AND date = ?")) {
+            
             ps.setString(1, empNo);
             ps.setString(2, dateStr);
             ResultSet rs = ps.executeQuery();
+            
             if (rs.next()) {
                 String timeIn = rs.getString("time_in");
                 String timeOut = rs.getString("time_out");
                 String secondTimeOut = rs.getString("second_time_out");
                 String workday = rs.getString("workday");
 
+                // 1. Check if currently working (In but not Out)
+                boolean hasIn = timeIn != null && !timeIn.isEmpty() && !"00:00:00 AM".equals(timeIn);
+                boolean hasOut = timeOut != null && !timeOut.isEmpty();
+                
+                if (hasIn && !hasOut) {
+                    return "Working"; // New Status
+                }
+
+                // 2. OT Logic
                 if ("OT".equals(workday)) {
-                    if (timeIn != null && timeOut != null && !"00:00:00 AM".equals(timeIn) && secondTimeOut != null) {
-                        return "On Time"; // Simplified logic for UI demo
-                    } else { return "OT"; }
+                    if (hasIn && hasOut && secondTimeOut != null && !secondTimeOut.isEmpty()) {
+                        return "On Time"; 
+                    } else if (hasIn && hasOut) {
+                        return "Working (OT)"; // Finished regular shift, currently in OT
+                    }
+                    return "OT"; // Pending
                 }
                 
-                // Logic preserved from your snippet
-                if (timeIn != null && timeOut != null) {
+                // 3. Regular Logic (Only runs if both In and Out are present)
+                if (hasIn && hasOut) {
                     java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern("hh:mm:ss a");
                     java.time.LocalTime timeInParsed = java.time.LocalTime.parse(timeIn, formatter);
                     java.time.LocalTime timeOutParsed = java.time.LocalTime.parse(timeOut, formatter);
-                    java.time.LocalTime start = java.time.LocalTime.of(8, 0);
-                    java.time.LocalTime end = java.time.LocalTime.of(17, 0);
+                    java.time.LocalTime start = java.time.LocalTime.of(8, 0); // 8:00 AM
+                    java.time.LocalTime end = java.time.LocalTime.of(17, 0);  // 5:00 PM
 
-                    boolean onTimeIn = timeInParsed.isBefore(start) || timeInParsed.equals(start);
-                    boolean onTimeOut = timeOutParsed.isAfter(end) || timeOutParsed.equals(end);
+                    // Grace period logic can be added here (e.g., plusMinutes(5))
+                    boolean onTimeIn = !timeInParsed.isAfter(start); // Before or at 8:00
+                    boolean onTimeOut = !timeOutParsed.isBefore(end); // After or at 17:00
 
                     if (onTimeIn && onTimeOut) return "On Time";
                     if (!onTimeIn && onTimeOut) return "Late";
                     if (onTimeIn && !onTimeOut) return "Undertime";
                     return "Late and Undertime";
                 }
-                return "Absent";
             }
         } catch (Exception e) { e.printStackTrace(); }
+        
+        // Default to Absent only if we are sure no logic above matched
         return "Absent";
     }
-
     private void loadTable() {
         model.setRowCount(0);
         java.time.LocalDate now = java.time.LocalDate.now();

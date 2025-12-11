@@ -3,12 +3,6 @@ package Fproj;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.ArrayList;
-
 import javax.swing.*;
 
 public class Employee extends JPanel {
@@ -29,20 +23,19 @@ public class Employee extends JPanel {
         setLayout(new BorderLayout());
 
         // =================================================================================
-        // 1. HEADER (Fixed: Uses BorderLayout instead of null layout)
+        // 1. HEADER
         // =================================================================================
         JPanel header = new JPanel(new BorderLayout());
         header.setBackground(HEADER_COLOR);
-        header.setPreferredSize(new Dimension(800, 60)); // Fixed height, flexible width
-        header.setBorder(BorderFactory.createEmptyBorder(5, 15, 5, 15)); // Padding
+        header.setPreferredSize(new Dimension(800, 60)); 
+        header.setBorder(BorderFactory.createEmptyBorder(5, 15, 5, 15)); 
 
         // --- Left Side (Logo + Title) ---
         JPanel headerLeft = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 5));
-        headerLeft.setOpaque(false); // Transparent to show header color
+        headerLeft.setOpaque(false); 
 
-        // Load Logo safely
         JLabel logoLabel = new JLabel();
-        ImageIcon icon = loadIcon("logo.png", 50, 50); // Resize logo to fit header
+        ImageIcon icon = loadIcon("logo.png", 50, 50); 
         if (icon != null) logoLabel.setIcon(icon);
         
         JLabel lblTitle = new JLabel("Employee Dashboard");
@@ -57,7 +50,14 @@ public class Employee extends JPanel {
         headerRight.setOpaque(false);
 
         JButton btnNotifications = createHeaderButton("Notifications");
-        btnNotifications.addActionListener(e -> showNotificationsDialog());
+        // FIXED: Uses the unified NotificationDialog (isAdmin = false)
+        btnNotifications.addActionListener(e -> {
+            new NotificationDialog(
+                (Frame) SwingUtilities.getWindowAncestor(this), 
+                empNo, 
+                false // Not Admin
+            ).setVisible(true);
+        });
 
         JButton btnLogout = createHeaderButton("Log-out");
         btnLogout.addActionListener(e -> Main.cardLayout.show(Main.cardPanel, "main"));
@@ -65,25 +65,22 @@ public class Employee extends JPanel {
         headerRight.add(btnNotifications);
         headerRight.add(btnLogout);
 
-        // Add sides to Header
         header.add(headerLeft, BorderLayout.WEST);
         header.add(headerRight, BorderLayout.EAST);
         add(header, BorderLayout.NORTH);
 
         // =================================================================================
-        // 2. SIDEBAR (Fixed: Buttons won't stretch infinitely)
+        // 2. SIDEBAR
         // =================================================================================
         JPanel sidebar = new JPanel(new BorderLayout());
         sidebar.setBackground(SIDEBAR_BG);
-        sidebar.setPreferredSize(new Dimension(200, 0)); // Fixed width
+        sidebar.setPreferredSize(new Dimension(200, 0)); 
         sidebar.setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, Color.LIGHT_GRAY));
 
-        // Container for buttons (pushes them to the top)
-        JPanel menuContainer = new JPanel(new GridLayout(0, 1, 0, 5)); // 1 column, auto rows, 5px gap
+        JPanel menuContainer = new JPanel(new GridLayout(0, 1, 0, 5)); 
         menuContainer.setOpaque(false);
         menuContainer.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
-        // Create buttons
         JButton btnHome = createMenuButton("Home", "Home.png");
         JButton btnProfile = createMenuButton("Profile", "leave.png");
         JButton btnAttendance = createMenuButton("Attendance", "attendance.png");
@@ -98,7 +95,7 @@ public class Employee extends JPanel {
         menuContainer.add(btnOT);
         menuContainer.add(btnPayroll);
 
-        sidebar.add(menuContainer, BorderLayout.NORTH); // Pins buttons to top
+        sidebar.add(menuContainer, BorderLayout.NORTH); 
         add(sidebar, BorderLayout.WEST);
 
         // =================================================================================
@@ -107,7 +104,7 @@ public class Employee extends JPanel {
         innerCardLayout = new CardLayout();
         innerCardPanel = new JPanel(innerCardLayout);
 
-        // Use ScrollPanes to ensure content is viewable on small screens
+        // Panels inside ScrollPanes for better responsiveness
         innerCardPanel.add(new JScrollPane(new EmpHomePanel(empNo)), "home");
         innerCardPanel.add(new JScrollPane(new empProfile(empNo)), "profile");
         innerCardPanel.add(new JScrollPane(new EmpAttendancePanel(empNo)), "attendance");
@@ -127,7 +124,6 @@ public class Employee extends JPanel {
         btnOT.addActionListener(e -> switchTab(btnOT, "ot"));
         btnPayroll.addActionListener(e -> switchTab(btnPayroll, "payroll"));
 
-        // Default selection
         selectButton(btnHome);
     }
 
@@ -155,11 +151,11 @@ public class Employee extends JPanel {
         btn.setFont(new Font("Arial", Font.PLAIN, 14));
         btn.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(new Color(220, 220, 220)),
-                BorderFactory.createEmptyBorder(10, 15, 10, 10) // Internal padding
+                BorderFactory.createEmptyBorder(10, 15, 10, 10) 
         ));
         btn.setFocusPainted(false);
         btn.setHorizontalAlignment(SwingConstants.LEFT);
-        btn.setPreferredSize(new Dimension(180, 45)); // Comfortable fixed height
+        btn.setPreferredSize(new Dimension(180, 45)); 
 
         ImageIcon icon = loadIcon(iconName, 22, 22);
         if (icon != null) {
@@ -179,15 +175,12 @@ public class Employee extends JPanel {
         return btn;
     }
 
-    // --- HELPER: Load Icon Safely ---
     private ImageIcon loadIcon(String fileName, int w, int h) {
         try {
-            // Try loading with leading slash first, then without
             java.net.URL imgURL = getClass().getResource("/" + fileName);
             if (imgURL == null) {
                 imgURL = getClass().getResource(fileName);
             }
-            
             if (imgURL != null) {
                 Image img = new ImageIcon(imgURL).getImage();
                 return new ImageIcon(img.getScaledInstance(w, h, Image.SCALE_SMOOTH));
@@ -207,41 +200,7 @@ public class Employee extends JPanel {
         }
         btn.setBackground(BTN_HOVER);
         btn.setForeground(Color.BLACK);
-        btn.setFont(new Font("Arial", Font.BOLD, 14)); // Make active text bold
+        btn.setFont(new Font("Arial", Font.BOLD, 14)); 
         currentSelectedButton = btn;
-    }
-
-    // --- NOTIFICATIONS LOGIC ---
-    private ArrayList<String> getRecentNotifications() {
-        ArrayList<String> list = new ArrayList<>();
-        String sql = "SELECT message, date FROM notifications WHERE empNo=? ORDER BY id DESC LIMIT 10";
-
-        try (Connection conn = Database.connect();
-             PreparedStatement pst = conn.prepareStatement(sql)) {
-
-            pst.setString(1, empNo);
-            ResultSet rs = pst.executeQuery();
-
-            while (rs.next()) {
-                list.add(rs.getString("date") + ": " + rs.getString("message"));
-            }
-            if (list.isEmpty()) list.add("No new notifications.");
-
-        } catch (SQLException e) {
-            e.printStackTrace();
-            list.add("Error loading notifications.");
-        }
-        return list;
-    }
-
-    private void showNotificationsDialog() {
-        ArrayList<String> notifs = getRecentNotifications();
-        JTextArea textArea = new JTextArea(10, 30);
-        textArea.setEditable(false);
-        textArea.setFont(new Font("Monospaced", Font.PLAIN, 13));
-        
-        for (String n : notifs) textArea.append(n + "\n\n");
-
-        JOptionPane.showMessageDialog(this, new JScrollPane(textArea), "Recent Notifications", JOptionPane.INFORMATION_MESSAGE);
     }
 }

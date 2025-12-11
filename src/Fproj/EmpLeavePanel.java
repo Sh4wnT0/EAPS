@@ -1,12 +1,13 @@
 package Fproj;
 
 import java.awt.*;
+import java.awt.event.ActionEvent;
 import java.sql.*;
 import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.Date;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-import javax.swing.border.TitledBorder;
 import javax.swing.table.*;
 import com.toedter.calendar.JDateChooser;
 
@@ -49,10 +50,10 @@ public class EmpLeavePanel extends JPanel {
         ));
 
         // Create balance cards
-        lblVacation = createBalanceLabel("Vacation", "0");
-        lblSick = createBalanceLabel("Sick", "0");
-        lblEmergency = createBalanceLabel("Emergency", "0");
-        lblSpecial = createBalanceLabel("Special", "0");
+        lblVacation = createBalanceLabel("0");
+        lblSick = createBalanceLabel("0");
+        lblEmergency = createBalanceLabel("0");
+        lblSpecial = createBalanceLabel("0");
 
         balancesPanel.add(createBalanceCard(lblVacation, "Vacation"));
         balancesPanel.add(createBalanceCard(lblSick, "Sick"));
@@ -111,7 +112,7 @@ public class EmpLeavePanel extends JPanel {
     }
     
     // --- UI Helpers ---
-    private JLabel createBalanceLabel(String title, String val) {
+    private JLabel createBalanceLabel(String val) {
         JLabel lbl = new JLabel(val, SwingConstants.CENTER);
         lbl.setFont(new Font("Segoe UI", Font.BOLD, 22));
         lbl.setForeground(BRAND_COLOR);
@@ -222,9 +223,30 @@ public class EmpLeavePanel extends JPanel {
         }
     }
 
+    // --- BUSINESS LOGIC HELPER ---
+    private long calculateBusinessDays(Date startDate, Date endDate) {
+        long businessDays = 0;
+        Calendar startCal = Calendar.getInstance();
+        startCal.setTime(startDate);
+        
+        Calendar endCal = Calendar.getInstance();
+        endCal.setTime(endDate);
+
+        // Loop while startCal is before or equal to endCal
+        while (!startCal.getTime().after(endCal.getTime())) {
+            int dayOfWeek = startCal.get(Calendar.DAY_OF_WEEK);
+            // Check if it's NOT Saturday and NOT Sunday
+            if (dayOfWeek != Calendar.SATURDAY && dayOfWeek != Calendar.SUNDAY) {
+                businessDays++;
+            }
+            startCal.add(Calendar.DAY_OF_MONTH, 1);
+        }
+        return businessDays;
+    }
+
     // --- DIALOG ---
     private void openLeaveRequestDialog(Integer requestId) {
-        JDialog dialog = new JDialog((java.awt.Frame) null, requestId == null ? "Request Leave" : "Edit Leave Request", true);
+        JDialog dialog = new JDialog((Frame) null, requestId == null ? "Request Leave" : "Edit Leave Request", true);
         dialog.setSize(450, 520);
         dialog.setLocationRelativeTo(this);
         
@@ -283,7 +305,7 @@ public class EmpLeavePanel extends JPanel {
         txtReason.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY));
         p.add(txtReason, gbc);
 
-        // Pre-fill
+        // Pre-fill if editing
         if (requestId != null) {
             try (ResultSet rs = Database.getLeaveRequestById(requestId)) {
                 if (rs.next()) {
@@ -315,38 +337,55 @@ public class EmpLeavePanel extends JPanel {
                 return;
             }
 
-            java.time.LocalDate today = java.time.LocalDate.now();
-            java.time.LocalDate startDateLocal = startDateObj.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate();
+            if (endDateObj.before(startDateObj)) {
+                JOptionPane.showMessageDialog(dialog, "End date must be after start date!");
+                return;
+            }
 
-            if (requestId == null && startDateLocal.isBefore(today)) { // Allow edits to past dates if admin allows, but typically no
-                 // Strict for new requests
-                 JOptionPane.showMessageDialog(dialog, "Start date cannot be earlier than today!");
-                 return;
+            // --- 1. Calculate Business Days (Mon-Fri) ---
+            long requiredDays = calculateBusinessDays(startDateObj, endDateObj);
+
+            if (requiredDays == 0) {
+                JOptionPane.showMessageDialog(dialog, "You selected only weekends. Please select workdays (Mon-Fri).");
+                return;
             }
 
             SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
             String startDate = sdf.format(startDateObj);
             String endDate = sdf.format(endDateObj);
 
-            if (endDateObj.before(startDateObj)) {
-                JOptionPane.showMessageDialog(dialog, "End date must be after start date!");
-                return;
+            // --- 2. Check Balance ---
+            int[] balances = Database.getLeaveBalances(empNo);
+            int balanceIndex = getBalanceIndex(leaveType);
+            boolean sufficientBalance = false;
+
+            if (balanceIndex != -1 && balances[balanceIndex] >= requiredDays) {
+                sufficientBalance = true;
             }
 
-            if (requestId == null) {
-                int[] balances = Database.getLeaveBalances(empNo);
-                int balanceIndex = getBalanceIndex(leaveType);
-                if (balanceIndex != -1) {
-                    long days = calculateLeaveDays(startDate, endDate);
-                    int currentBalance = balances[balanceIndex];
-                    if (currentBalance < days) {
-                        JOptionPane.showMessageDialog(dialog, "Insufficient leave balance! Current: " + currentBalance + ", Required: " + days);
-                        return;
+            // --- 3. Process Request ---
+            if (requestId == null) { // NEW REQUEST
+                if (sufficientBalance) {
+                    // SCENARIO A: Has Balance -> Request Leave (Admin Approval)
+                    Database.insertLeaveRequest(empNo, empName, empPosition, leaveType, startDate, endDate, reason);
+                    JOptionPane.showMessageDialog(dialog, "Leave request submitted for approval.");
+                } else {
+                    // SCENARIO B: No Balance -> Direct Absent/UL Record
+                    int confirm = JOptionPane.showConfirmDialog(dialog, 
+                        "Insufficient " + leaveType + " credits (Available: " + (balanceIndex != -1 ? balances[balanceIndex] : 0) + ").\n" +
+                        "This period (" + requiredDays + " workdays) will be recorded as Unpaid Leave (Absent).\n" +
+                        "Proceed?", 
+                        "Insufficient Balance", JOptionPane.YES_NO_OPTION);
+
+                    if (confirm == JOptionPane.YES_OPTION) {
+                        recordUnpaidLeaveLoop(startDateObj, endDateObj);
+                        JOptionPane.showMessageDialog(dialog, "Marked as Absent (UL) in attendance.");
+                    } else {
+                        return; // User cancelled
                     }
                 }
-                Database.insertLeaveRequest(empNo, empName, empPosition, leaveType, startDate, endDate, reason);
-                JOptionPane.showMessageDialog(dialog, "Leave request submitted!");
             } else {
+                // UPDATE EXISTING REQUEST
                 Database.updateLeaveRequest(requestId, leaveType, startDate, endDate, reason);
                 JOptionPane.showMessageDialog(dialog, "Leave request updated!");
             }
@@ -360,6 +399,60 @@ public class EmpLeavePanel extends JPanel {
         dialog.add(p);
         dialog.setVisible(true);
     }
+    
+    // Helper to loop through dates and insert UL for weekdays
+    private void recordUnpaidLeaveLoop(Date start, Date end) {
+        Calendar cal = Calendar.getInstance();
+        cal.setTime(start);
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+
+        while (!cal.getTime().after(end)) {
+            int day = cal.get(Calendar.DAY_OF_WEEK);
+            if (day != Calendar.SATURDAY && day != Calendar.SUNDAY) {
+                String dateStr = sdf.format(cal.getTime());
+                // Insert into DB
+                performAttendanceInsert(dateStr, "Absent", "UL");
+            }
+            cal.add(Calendar.DAY_OF_MONTH, 1);
+        }
+    }
+
+    // Direct DB insert for Unpaid Leave (To ensure it works without modifying Database.java if not yet updated)
+    private void performAttendanceInsert(String date, String status, String workday) {
+        String checkSql = "SELECT id FROM attendance_records WHERE empNo = ? AND date = ?";
+        String insertSql = "INSERT INTO attendance_records (empNo, date, time_in, time_out, status, workday) VALUES (?, ?, '00:00:00 AM', '00:00:00 PM', ?, ?)";
+        String updateSql = "UPDATE attendance_records SET status = ?, workday = ?, time_in='00:00:00 AM', time_out='00:00:00 PM' WHERE empNo = ? AND date = ?";
+
+        try (Connection conn = Database.connect()) {
+            boolean exists = false;
+            try (PreparedStatement check = conn.prepareStatement(checkSql)) {
+                check.setString(1, empNo);
+                check.setString(2, date);
+                ResultSet rs = check.executeQuery();
+                if (rs.next()) exists = true;
+            }
+
+            if (exists) {
+                try (PreparedStatement upd = conn.prepareStatement(updateSql)) {
+                    upd.setString(1, status);
+                    upd.setString(2, workday);
+                    upd.setString(3, empNo);
+                    upd.setString(4, date);
+                    upd.executeUpdate();
+                }
+            } else {
+                try (PreparedStatement ins = conn.prepareStatement(insertSql)) {
+                    ins.setString(1, empNo);
+                    ins.setString(2, date);
+                    ins.setString(3, status);
+                    ins.setString(4, workday);
+                    ins.executeUpdate();
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
 
     private void deleteLeaveRequest(int requestId) {
         int confirm = JOptionPane.showConfirmDialog(this, "Are you sure you want to delete this leave request?", "Confirm Delete", JOptionPane.YES_NO_OPTION);
@@ -369,14 +462,6 @@ public class EmpLeavePanel extends JPanel {
             loadLeaveRequests();
             loadBalances(); 
         }
-    }
-
-    private long calculateLeaveDays(String startDate, String endDate) {
-        try {
-            java.time.LocalDate start = java.time.LocalDate.parse(startDate);
-            java.time.LocalDate end = java.time.LocalDate.parse(endDate);
-            return java.time.temporal.ChronoUnit.DAYS.between(start, end) + 1;
-        } catch (Exception e) { return 0; }
     }
 
     private int getBalanceIndex(String leaveType) {

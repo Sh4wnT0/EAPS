@@ -2,10 +2,8 @@ package Fproj;
 
 import java.awt.*;
 import java.awt.event.*;
-import java.awt.print.PrinterException;
 import java.sql.*;
 import java.text.DecimalFormat;
-import java.text.MessageFormat;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.*;
@@ -36,12 +34,24 @@ public class EmpPayrollPanel extends JPanel {
         lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 24));
         lblTitle.setForeground(new Color(50, 50, 50));
         
+        // Button Panel
+        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        btnPanel.setOpaque(false);
+
+        // NEW: Request Payslip Button
+        JButton btnRequest = new JButton("Request Payslip");
+        styleButton(btnRequest, new Color(70, 130, 180)); // Steel Blue
+        btnRequest.addActionListener(e -> requestPayslipAction());
+
         JButton btnRefresh = new JButton("Refresh");
         styleButton(btnRefresh, BRAND_COLOR);
         btnRefresh.addActionListener(e -> loadPayslips());
 
+        btnPanel.add(btnRequest);
+        btnPanel.add(btnRefresh);
+
         headerPanel.add(lblTitle, BorderLayout.WEST);
-        headerPanel.add(btnRefresh, BorderLayout.EAST);
+        headerPanel.add(btnPanel, BorderLayout.EAST);
         add(headerPanel, BorderLayout.NORTH);
 
         // --- 2. Table ---
@@ -78,15 +88,24 @@ public class EmpPayrollPanel extends JPanel {
         loadPayslips();
     }
 
+    // --- NEW ACTION: Send Request ---
+    private void requestPayslipAction() {
+        int confirm = JOptionPane.showConfirmDialog(this, 
+            "Send a request to Admin for your latest payslip?", 
+            "Confirm Request", JOptionPane.YES_NO_OPTION);
+            
+        if (confirm == JOptionPane.YES_OPTION) {
+            Database.insertPayslipRequest(empNo);
+            JOptionPane.showMessageDialog(this, "Request sent to Admin successfully!");
+        }
+    }
+
     private void styleTable(JTable t) {
         t.setRowHeight(40);
         t.setFont(CELL_FONT);
-        
-        // --- CHANGED: Visible Grid ---
         t.setShowGrid(true);
-        t.setGridColor(Color.GRAY);
+        t.setGridColor(Color.LIGHT_GRAY); // Changed to Light Gray for cleaner look
         t.setIntercellSpacing(new Dimension(1, 1));
-        
         t.setSelectionBackground(new Color(230, 240, 255));
         t.setSelectionForeground(Color.BLACK);
         
@@ -144,7 +163,7 @@ public class EmpPayrollPanel extends JPanel {
             setLayout(new BorderLayout());
             getContentPane().setBackground(Color.WHITE);
 
-            // A. Title Header
+            // A. Header
             JPanel pnlHeader = new JPanel(new GridLayout(2, 1));
             pnlHeader.setBackground(BRAND_COLOR);
             pnlHeader.setBorder(new EmptyBorder(15, 0, 15, 0));
@@ -161,7 +180,7 @@ public class EmpPayrollPanel extends JPanel {
             pnlHeader.add(l2);
             add(pnlHeader, BorderLayout.NORTH);
 
-            // B. Content Body
+            // B. Content
             JPanel pnlContent = new JPanel(new GridBagLayout());
             pnlContent.setBackground(Color.WHITE);
             pnlContent.setBorder(new EmptyBorder(20, 40, 20, 40));
@@ -170,31 +189,25 @@ public class EmpPayrollPanel extends JPanel {
             gbc.fill = GridBagConstraints.HORIZONTAL;
             gbc.insets = new Insets(5, 0, 5, 0);
             gbc.weightx = 1.0;
-            
             int y = 0;
             
-            // Attendance Summary Section
             addSectionHeader(pnlContent, gbc, y++, "ATTENDANCE SUMMARY");
             addRow(pnlContent, gbc, y++, "Days Present:", String.valueOf(pres));
             addRow(pnlContent, gbc, y++, "Days Absent:", String.valueOf(abs));
-            addRow(pnlContent, gbc, y++, "Days Late:", String.valueOf(late));
-            addRow(pnlContent, gbc, y++, "Days Undertime:", String.valueOf(under));
+            addRow(pnlContent, gbc, y++, "Late (mins):", String.valueOf(late));
+            addRow(pnlContent, gbc, y++, "Undertime (mins):", String.valueOf(under));
             
-            // Spacer
             gbc.gridy = y++; pnlContent.add(Box.createVerticalStrut(15), gbc);
             
-            // Financials Section
             addSectionHeader(pnlContent, gbc, y++, "EARNINGS & DEDUCTIONS");
             addRow(pnlContent, gbc, y++, "Gross Pay:", df.format(gross));
             addRow(pnlContent, gbc, y++, "Total Deductions:", "- " + df.format(ded));
             
-            // Divider Line
             gbc.gridy = y++; 
             JSeparator sep = new JSeparator();
             sep.setForeground(Color.GRAY);
             pnlContent.add(sep, gbc);
             
-            // Net Pay (Big)
             gbc.gridy = y++; gbc.insets = new Insets(15, 0, 0, 0);
             JPanel netPanel = new JPanel(new BorderLayout());
             netPanel.setBackground(Color.WHITE);
@@ -212,15 +225,14 @@ public class EmpPayrollPanel extends JPanel {
 
             add(pnlContent, BorderLayout.CENTER);
 
-            // C. Print Button
-            JButton btnPrint = new JButton("Print Copy");
-            styleButton(btnPrint, BRAND_COLOR);
-            btnPrint.setPreferredSize(new Dimension(100, 45));
-            btnPrint.addActionListener(e -> printComponent(pnlContent)); // Placeholder print
-            
+            // C. Footer
             JPanel btnPanel = new JPanel();
             btnPanel.setBackground(Color.WHITE);
             btnPanel.setBorder(new EmptyBorder(10, 10, 20, 10));
+            JButton btnPrint = new JButton("Print Copy");
+            styleButton(btnPrint, BRAND_COLOR);
+            btnPrint.setPreferredSize(new Dimension(100, 45));
+            btnPrint.addActionListener(e -> JOptionPane.showMessageDialog(this, "Printing..."));
             btnPanel.add(btnPrint);
             add(btnPanel, BorderLayout.SOUTH);
         }
@@ -241,10 +253,6 @@ public class EmpPayrollPanel extends JPanel {
             row.add(new JLabel(label), BorderLayout.WEST);
             row.add(new JLabel(val), BorderLayout.EAST);
             p.add(row, gbc);
-        }
-        
-        private void printComponent(JPanel panel) {
-             JOptionPane.showMessageDialog(this, "Printing feature would go here (using PrinterJob).");
         }
     }
 
@@ -279,7 +287,6 @@ public class EmpPayrollPanel extends JPanel {
             int abs = (int) table.getModel().getValueAt(r, 7);
             int late = (int) table.getModel().getValueAt(r, 8);
             int under = (int) table.getModel().getValueAt(r, 9);
-            
             new PayslipDialog(period, date, net, gross, ded, pres, abs, late, under).setVisible(true);
         }
     }
