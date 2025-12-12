@@ -17,9 +17,8 @@ public class NotificationDialog extends JDialog {
     private JPanel contentPanel;
     private String currentUser;
     private boolean isAdmin;
-    private Consumer<String> navigationCallback; // Callback for switching tabs
+    private Consumer<String> navigationCallback; 
 
-    // Constructor with Navigation Callback
     public NotificationDialog(Frame owner, String empNo, boolean isAdmin, Consumer<String> navCallback) {
         super(owner, isAdmin ? "Pending Tasks" : "Notifications", true);
         this.currentUser = empNo;
@@ -72,13 +71,8 @@ public class NotificationDialog extends JDialog {
 
     private void refreshContent() {
         contentPanel.removeAll();
-
-        if (isAdmin) {
-            loadAdminContent();
-        } else {
-            loadEmployeeContent();
-        }
-
+        if (isAdmin) loadAdminContent();
+        else loadEmployeeContent();
         contentPanel.revalidate();
         contentPanel.repaint();
     }
@@ -90,16 +84,11 @@ public class NotificationDialog extends JDialog {
         List<String[]> security = new ArrayList<>();
         List<String[]> approvals = new ArrayList<>();
 
-        // 1. Separate requests
         for (String[] req : allRequests) {
-            if ("Password Reset".equalsIgnoreCase(req[3])) {
-                security.add(req);
-            } else {
-                approvals.add(req);
-            }
+            if ("Password Reset".equalsIgnoreCase(req[3])) security.add(req);
+            else approvals.add(req);
         }
 
-        // 2. Render Security Section (Priority)
         if (!security.isEmpty()) {
             addSectionHeader("Security Alerts (High Priority)", new Color(220, 53, 69));
             for (String[] req : security) {
@@ -108,7 +97,6 @@ public class NotificationDialog extends JDialog {
             }
         }
 
-        // 3. Render Approvals Section
         if (!approvals.isEmpty()) {
             addSectionHeader("Pending Approvals", BRAND_COLOR);
             for (String[] req : approvals) {
@@ -122,15 +110,14 @@ public class NotificationDialog extends JDialog {
         }
     }
 
-    // --- CARD: Password Reset ---
+    // --- CARD: Password Reset (UPDATED) ---
     private JPanel createPasswordResetCard(String[] data) {
         // data: [ID, EmpNo, Name, Type, Date, Table]
         JPanel card = createBaseCard();
-        card.setBorder(BorderFactory.createMatteBorder(0, 4, 0, 0, new Color(220, 53, 69))); // Red strip
+        card.setBorder(BorderFactory.createMatteBorder(0, 4, 0, 0, new Color(220, 53, 69))); 
 
         JLabel lblTitle = new JLabel("Password Reset: " + data[2]);
         lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        
         JLabel lblSub = new JLabel("ID: " + data[1] + " • Date: " + data[4]);
         lblSub.setForeground(Color.GRAY);
 
@@ -138,11 +125,18 @@ public class NotificationDialog extends JDialog {
         styleButton(btnAction, new Color(220, 53, 69), Color.WHITE);
         btnAction.setPreferredSize(new Dimension(80, 30));
         
-        // Button Logic: Prompt email -> Reset -> Email -> Refresh
+        // --- AUTO-FETCH EMAIL LOGIC ---
         btnAction.addActionListener(e -> {
-             String email = JOptionPane.showInputDialog(this, "Enter user email to send credentials:");
+             String userId = data[1];
+             String email = Database.getUserEmail(userId); // Fetch from DB
+             
+             if(email == null || email.isEmpty()) {
+                 // Fallback if DB fetch fails
+                 email = JOptionPane.showInputDialog(this, "Email not found for user.\nEnter manually:");
+             }
+             
              if(email != null && !email.isEmpty()) {
-                 performPassReset(data[0], data[1], data[2], email);
+                 performPassReset(data[0], userId, data[2], email);
              }
         });
 
@@ -150,7 +144,7 @@ public class NotificationDialog extends JDialog {
         return card;
     }
 
-    // --- CARD: Generic Approval (Leave, OT, ACR) ---
+    // --- CARD: Generic Approval ---
     private JPanel createReviewCard(String[] data) {
         String type = data[3];
         Color typeColor = getTypeColor(type);
@@ -161,7 +155,6 @@ public class NotificationDialog extends JDialog {
         JLabel lblTitle = new JLabel(type + " Request");
         lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 14));
         lblTitle.setForeground(typeColor);
-        
         JLabel lblSub = new JLabel(data[2] + " (" + data[1] + ") • " + data[4]);
         lblSub.setForeground(Color.DARK_GRAY);
 
@@ -170,8 +163,7 @@ public class NotificationDialog extends JDialog {
         btnReview.setPreferredSize(new Dimension(80, 30));
         
         btnReview.addActionListener(e -> {
-            dispose(); // Close dialog
-            // Navigate based on type
+            dispose(); 
             if (navigationCallback != null) {
                 switch(type) {
                     case "Leave": navigationCallback.accept("leave"); break;
@@ -208,32 +200,32 @@ public class NotificationDialog extends JDialog {
     //              PASSWORD RESET LOGIC
     // ==========================================
     private void performPassReset(String reqId, String userId, String name, String email) {
+        // Show the fetched email in the confirmation
         int confirm = JOptionPane.showConfirmDialog(this, 
-            "Generate new password for " + name + "?", "Confirm Reset", JOptionPane.YES_NO_OPTION);
+            "Generate new password for " + name + "?\nSending credentials to: " + email, 
+            "Confirm Reset", JOptionPane.YES_NO_OPTION);
             
         if(confirm == JOptionPane.YES_OPTION) {
             String newPass = generateRandomPassword();
             try {
-                // 1. Database Update
                 Database.performPasswordReset(reqId, userId, newPass);
                 
-                // 2. Email Sending (Threaded to prevent freeze)
                 new Thread(() -> {
                     try {
                         sendEmail(email, name, userId, newPass);
                         SwingUtilities.invokeLater(() -> 
-                            JOptionPane.showMessageDialog(this, "Reset successful! Credentials sent to " + email));
+                            JOptionPane.showMessageDialog(this, "Reset successful! Email sent."));
                     } catch (MessagingException e) {
                         e.printStackTrace();
                         SwingUtilities.invokeLater(() -> 
-                            JOptionPane.showMessageDialog(this, "Password reset in DB, but email failed: " + e.getMessage(), "Email Error", JOptionPane.ERROR_MESSAGE));
+                            JOptionPane.showMessageDialog(this, "Reset done, but email failed: " + e.getMessage(), "Email Error", JOptionPane.ERROR_MESSAGE));
                     }
                 }).start();
 
                 refreshContent();
             } catch (Exception e) {
                 e.printStackTrace();
-                JOptionPane.showMessageDialog(this, "Error processing reset: " + e.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Error processing reset: " + e.getMessage());
             }
         }
     }
@@ -248,7 +240,7 @@ public class NotificationDialog extends JDialog {
 
     private void sendEmail(String to, String name, String user, String pass) throws MessagingException {
         final String from = "sh4wntolentino@gmail.com"; 
-        final String pwd = "dkffdbkmlifnvows"; // App Password
+        final String pwd = "dkffdbkmlifnvows"; 
 
         Properties props = new Properties();
         props.put("mail.smtp.auth", "true");
@@ -319,10 +311,10 @@ public class NotificationDialog extends JDialog {
 
     private Color getTypeColor(String type) {
         switch(type) {
-            case "Leave": return new Color(255, 193, 7); // Amber
-            case "ACR": return new Color(23, 162, 184); // Teal
-            case "Payslip": return new Color(40, 167, 69); // Green
-            default: return new Color(108, 117, 125); // Gray
+            case "Leave": return new Color(255, 193, 7); 
+            case "ACR": return new Color(23, 162, 184); 
+            case "Payslip": return new Color(40, 167, 69); 
+            default: return new Color(108, 117, 125); 
         }
     }
 }

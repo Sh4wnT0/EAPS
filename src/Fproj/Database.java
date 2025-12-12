@@ -1112,6 +1112,27 @@ public class Database {
         }
     }
     
+ // ---------------- GET USER EMAIL (Smart Lookup) ----------------
+    public static String getUserEmail(String userId) {
+        // 1. Try Employee Table
+        String sqlEmp = "SELECT email FROM employees WHERE empNo = ?";
+        try (Connection conn = connect(); PreparedStatement pst = conn.prepareStatement(sqlEmp)) {
+            pst.setString(1, userId);
+            ResultSet rs = pst.executeQuery();
+            if (rs.next()) return rs.getString("email");
+        } catch (SQLException e) { e.printStackTrace(); }
+
+        // 2. Try Admin/Staff Table
+        String sqlStaff = "SELECT email FROM as_records WHERE username = ?";
+        try (Connection conn = connect(); PreparedStatement pst = conn.prepareStatement(sqlStaff)) {
+            pst.setString(1, userId);
+            ResultSet rs = pst.executeQuery();
+            if (rs.next()) return rs.getString("email");
+        } catch (SQLException e) { e.printStackTrace(); }
+
+        return null; // Not found
+    }
+    
  // ---------------- GET PENDING PASSWORD RESET REQUESTS ----------------
     // Returns List of [RequestID, EmpNo, Name, Email, Date]
     public static java.util.List<String[]> getPendingPasswordResets() {
